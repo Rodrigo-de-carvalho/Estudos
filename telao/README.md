@@ -81,12 +81,12 @@ telao/
 ├── manifest.webmanifest  permite "instalar" no celular
 ├── css/style.css         todo o visual
 ├── img/icon.svg          ícone
+├── vendor/hls.min.js     player de streams ao vivo (hls.js 1.5.20)
 └── js/
     ├── store.js          o que fica salvo no navegador (chave, lista, progresso)
     ├── api.js            conversa com o TMDB e o Internet Archive
     ├── tv.js             TV ao vivo: leitura de M3U, player HLS, favoritos e VLC
     └── app.js            telas, rotas (#/filmes, #/t/...), player e navegação por setas
-vendor/hls.min.js         player de streams ao vivo (hls.js 1.5.20)
 ```
 
 ## Ideias para continuar
