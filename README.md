@@ -53,7 +53,6 @@ Abra o arquivo `index.html` no navegador. Pronto.
 Se preferir um servidor local (recomendado para instalar como app no celular):
 
 ```bash
-cd telao
 python3 -m http.server 8000
 # abra http://localhost:8000
 ```
@@ -70,8 +69,8 @@ A chave fica salva só no seu navegador.
 
 Como é um site estático, qualquer hospedagem gratuita serve:
 
-- **GitHub Pages**: no repositório, vá em *Settings → Pages*, escolha a branch e a pasta, e o app fica em `https://<seu-usuario>.github.io/Estudos/telao/`.
-- **Vercel** ou **Netlify**: importe o repositório e defina `telao` como pasta raiz.
+- **GitHub Pages**: no repositório, vá em *Settings → Pages*, escolha a branch e a pasta raiz (`/`), e o app fica em `https://<seu-usuario>.github.io/Estudos/`.
+- **Vercel** ou **Netlify**: importe o repositório; não precisa de nenhuma configuração.
 
 ## App Android (APK)
 
@@ -82,7 +81,7 @@ Dentro do app, salvar lista, copiar link e a TV ao vivo usam as funções do pr�
 ## Arquivos
 
 ```
-telao/
+Estudos/
 ├── index.html            estrutura da página (topo, menu, rodapé)
 ├── manifest.webmanifest  permite "instalar" no celular
 ├── css/style.css         todo o visual
