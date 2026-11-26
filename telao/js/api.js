@@ -16,6 +16,37 @@
   const IA = 'https://archive.org';
   const cache = new Map();
 
+  /* Cache guardado no aparelho: as listas abrem na hora quando o app é aberto de novo. */
+  const PC_KEY = 'telao.cache';
+  let pc = null;
+  let pcTimer = null;
+  function pcLoad() {
+    if (pc) return pc;
+    try { pc = JSON.parse(localStorage.getItem(PC_KEY) || '{}') || {}; } catch (e) { pc = {}; }
+    return pc;
+  }
+  function pcSave() {
+    clearTimeout(pcTimer);
+    pcTimer = setTimeout(() => {
+      const ks = Object.keys(pc).sort((a, b) => pc[b].t - pc[a].t);
+      ks.slice(80).forEach((k) => delete pc[k]);
+      try { localStorage.setItem(PC_KEY, JSON.stringify(pc)); } catch (e) { /* sem espaço: segue sem cache */ }
+    }, 400);
+  }
+  function persisted(key, ttl, make) {
+    const c = pcLoad()[key];
+    if (c && Date.now() - c.t < ttl) return Promise.resolve(c.v);
+    return make().then((v) => {
+      pcLoad()[key] = { t: Date.now(), v };
+      pcSave();
+      return v;
+    });
+  }
+  const HOUR = 3600 * 1000;
+
+  // Tamanho da imagem de fundo conforme a tela (celular baixa uma versão menor).
+  const backdropSize = () => ((window.innerWidth || 1280) * (window.devicePixelRatio || 1) <= 1000 ? 'w780' : 'w1280');
+
   function cached(key, make) {
     if (cache.has(key)) return cache.get(key);
     const p = make();
@@ -80,15 +111,18 @@
       title: r.title || r.name || '',
       year: date.slice(0, 4),
       poster: r.poster_path ? IMG + 'w342' + r.poster_path : '',
-      backdrop: r.backdrop_path ? IMG + 'w1280' + r.backdrop_path : '',
+      backdrop: r.backdrop_path ? IMG + backdropSize() + r.backdrop_path : '',
       overview: r.overview || '',
       rating: r.vote_average || 0,
     };
   }
 
-  async function tmdbList(path, params, type) {
-    const d = await tmdb(path, params);
-    return (d.results || []).map((r) => fromTmdb(r, type)).filter((i) => i && i.poster);
+  function tmdbList(path, params, type) {
+    if (!T.store.getKey()) return tmdb(path, params); // rejeita com NO_KEY
+    const key = 'tm:' + path + JSON.stringify(params || {}) + (type || '');
+    return persisted(key, 6 * HOUR, () => tmdb(path, params).then((d) =>
+      (d.results || []).map((r) => fromTmdb(r, type)).filter((i) => i && i.poster)
+    ));
   }
 
   function tmdbDetails(type, id) {
@@ -178,10 +212,10 @@
     url.searchParams.set('page', o.page);
     url.searchParams.set('output', 'json');
     const key = url.toString();
-    return cached(key, () => getJSON(key)).then((d) => ({
+    return persisted('ia:' + key, 12 * HOUR, () => cached(key, () => getJSON(key)).then((d) => ({
       total: (d.response && d.response.numFound) || 0,
       items: ((d.response && d.response.docs) || []).map(fromIa),
-    }));
+    })));
   }
 
   function iaCategory(key) {
@@ -261,6 +295,12 @@
   T.api = {
     tmdb, testKey, tmdbList, tmdbDetails, tmdbSeason, tmdbSearch, fromTmdb, pickTrailer, img,
     IA_CATS, iaCategory, iaCatList, iaFind, iaDetails, iaFileUrl, iaPage, iaThumb,
-    clearCache: () => cache.clear(),
+    backdropSize,
+    clearCache() {
+      cache.clear();
+      const c = pcLoad();
+      Object.keys(c).forEach((k) => { if (k.startsWith('tm:')) delete c[k]; });
+      pcSave();
+    },
   };
 })();

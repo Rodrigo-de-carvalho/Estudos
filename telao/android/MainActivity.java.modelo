@@ -15,18 +15,29 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Method;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
 
 // Tela única: abre assets/index.html num WebView.
 // Ponte para o JavaScript (window.Android): salvarArquivo, abrirArquivo, pegarArquivoAberto,
-// e para o Telão: abrirNoVlc, copiar, manterTelaLigada.
+// e para o Telão: copiar, manterTelaLigada, modoAoVivo, prepararCanal.
+//
+// TV ao vivo: enquanto um canal está aberto (modoAoVivo), os pedidos de vídeo passam
+// pelo próprio app (shouldInterceptRequest). O app busca os dados como um player comum,
+// sem a trava de CORS dos navegadores, envia o Referer/User-Agent que o canal exige e
+// segue redirecionamentos (inclusive de https para http).
 public class MainActivity extends Activity {
     private static final boolean INTERNET = __INTERNET__;
     private static final boolean BLOQUEAR_PRINT = __BLOQUEAR_PRINT__;
@@ -38,6 +49,9 @@ public class MainActivity extends Activity {
     private FrameLayout raiz;
     private View telaCheia;
     private WebChromeClient.CustomViewCallback fecharTelaCheia;
+    private volatile boolean aoVivo = false;
+    private volatile String canalReferer = "", canalUA = "";
+    private String uaPadrao = "";
     private String paraSalvar;
     private String arquivoAberto;
 
@@ -61,15 +75,24 @@ public class MainActivity extends Activity {
         chamar(s, "setMediaPlaybackRequiresUserGesture", boolean.class, Boolean.FALSE);
         // Permite canais http:// dentro da página https (API 21+; 0 = MIXED_CONTENT_ALWAYS_ALLOW).
         if (INTERNET) chamar(s, "setMixedContentMode", int.class, Integer.valueOf(0));
+        uaPadrao = s.getUserAgentString();
 
         web.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
+                if (!aoVivo || !INTERNET) return null;
+                if (!(url.startsWith("http://") || url.startsWith("https://")) || url.startsWith("__BASE_URL__")) return null;
+                if (naoInterceptar(url)) return null;
+                try { return buscar(url); } catch (Exception e) { return null; }
+            }
+
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 if (url.startsWith("intent:")) {
                     try {
                         Intent i = Intent.parseUri(url, 1); // 1 = Intent.URI_INTENT_SCHEME
                         startActivity(i);
-                    } catch (Exception e) { abrirLoja("org.videolan.vlc"); }
+                    } catch (Exception e) { }
                     return true;
                 }
                 // Links externos abrem no navegador do celular (só se o app tem internet).
@@ -116,6 +139,97 @@ public class MainActivity extends Activity {
         web.loadDataWithBaseURL("__BASE_URL__", lerAsset("index.html"), "text/html", "UTF-8", null);
         raiz.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         setContentView(raiz);
+    }
+
+    // APIs, imagens e YouTube seguem o caminho normal do WebView.
+    private static boolean naoInterceptar(String url) {
+        String host = Uri.parse(url).getHost();
+        if (host == null) return true;
+        host = host.toLowerCase();
+        String[] fora = { "themoviedb.org", "tmdb.org", "archive.org", "github.io", "githubusercontent.com",
+            "youtube.com", "youtube-nocookie.com", "ytimg.com", "googlevideo.com", "google.com", "gstatic.com" };
+        for (String f : fora) if (host.equals(f) || host.endsWith("." + f)) return true;
+        String caminho = Uri.parse(url).getPath();
+        caminho = caminho == null ? "" : caminho.toLowerCase();
+        return caminho.endsWith(".png") || caminho.endsWith(".jpg") || caminho.endsWith(".jpeg")
+            || caminho.endsWith(".svg") || caminho.endsWith(".webp") || caminho.endsWith(".gif");
+    }
+
+    private WebResourceResponse buscar(String endereco) throws Exception {
+        URL u = new URL(endereco);
+        HttpURLConnection c = null;
+        int code = 0;
+        for (int i = 0; i < 6; i++) {
+            c = (HttpURLConnection) u.openConnection();
+            c.setInstanceFollowRedirects(false);
+            c.setConnectTimeout(12000);
+            c.setReadTimeout(25000);
+            c.setRequestProperty("User-Agent", canalUA.length() > 0 ? canalUA : uaPadrao);
+            if (canalReferer.length() > 0) {
+                c.setRequestProperty("Referer", canalReferer);
+                String origem = Uri.parse(canalReferer).getScheme() + "://" + Uri.parse(canalReferer).getHost();
+                c.setRequestProperty("Origin", origem);
+            }
+            code = c.getResponseCode();
+            if (code >= 300 && code < 400) {
+                String loc = c.getHeaderField("Location");
+                c.disconnect();
+                if (loc == null) break;
+                u = new URL(u, loc);
+                continue;
+            }
+            break;
+        }
+        InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
+        if (in == null) in = new ByteArrayInputStream(new byte[0]);
+        String tipo = c.getContentType();
+        String mime = tipo == null ? "application/octet-stream" : tipo.split(";")[0].trim();
+        String caminho = u.getPath() == null ? "" : u.getPath().toLowerCase();
+        boolean playlist = mime.toLowerCase().contains("mpegurl") || caminho.endsWith(".m3u8") || caminho.endsWith(".m3u");
+        if (playlist && code < 400) {
+            // O hls.js resolve endereços relativos pelo endereço original; depois de um
+            // redirecionamento, eles precisam virar absolutos.
+            String texto = new String(lerTudo(in), "UTF-8");
+            in = new ByteArrayInputStream(reescreverPlaylist(texto, u).getBytes("UTF-8"));
+            mime = "application/vnd.apple.mpegurl";
+        }
+        WebResourceResponse r = new WebResourceResponse(mime, playlist ? "UTF-8" : null, in);
+        Map<String, String> h = new HashMap<String, String>();
+        h.put("Access-Control-Allow-Origin", "*");
+        h.put("Cache-Control", "no-cache");
+        try {
+            r.getClass().getMethod("setResponseHeaders", Map.class).invoke(r, h);
+            if (code >= 400 && code < 600) {
+                String motivo = c.getResponseMessage();
+                r.getClass().getMethod("setStatusCodeAndReasonPhrase", int.class, String.class)
+                    .invoke(r, Integer.valueOf(code), motivo == null || motivo.length() == 0 ? "Erro" : motivo);
+            }
+        } catch (Exception e) { }
+        return r;
+    }
+
+    private static String reescreverPlaylist(String texto, URL base) {
+        StringBuilder sb = new StringBuilder();
+        String[] linhas = texto.split("\n");
+        for (int k = 0; k < linhas.length; k++) {
+            String l = linhas[k].trim();
+            if (l.length() == 0) continue;
+            if (l.startsWith("#")) {
+                int i = l.indexOf("URI=\"");
+                if (i >= 0) {
+                    int j = l.indexOf('"', i + 5);
+                    if (j > i) {
+                        try { l = l.substring(0, i + 5) + new URL(base, l.substring(i + 5, j)).toString() + l.substring(j); }
+                        catch (Exception e) { }
+                    }
+                }
+                sb.append(l);
+            } else {
+                try { sb.append(new URL(base, l).toString()); } catch (Exception e) { sb.append(l); }
+            }
+            sb.append('\n');
+        }
+        return sb.toString();
     }
 
     private static void chamar(Object alvo, String metodo, Class<?> tipo, Object valor) {
@@ -229,23 +343,6 @@ public class MainActivity extends Activity {
             return p;
         }
 
-        // Abre um vídeo ou canal no VLC. Se o VLC não estiver instalado, oferece outro player;
-        // se nenhum player abrir, leva para a página do VLC na loja. Devolve "vlc", "outro" ou "loja".
-        @JavascriptInterface
-        public String abrirNoVlc(String url, String titulo) {
-            Uri u = Uri.parse(url);
-            Intent vlc = new Intent(Intent.ACTION_VIEW);
-            vlc.setDataAndType(u, "video/*");
-            vlc.setPackage("org.videolan.vlc");
-            vlc.putExtra("title", titulo);
-            try { startActivity(vlc); return "vlc"; } catch (Exception e) { }
-            Intent outro = new Intent(Intent.ACTION_VIEW);
-            outro.setDataAndType(u, "video/*");
-            try { startActivity(outro); return "outro"; } catch (Exception e) { }
-            abrirLoja("org.videolan.vlc");
-            return "loja";
-        }
-
         @JavascriptInterface
         public boolean copiar(String texto) {
             try {
@@ -253,6 +350,17 @@ public class MainActivity extends Activity {
                 cm.setPrimaryClip(ClipData.newPlainText("Telão", texto));
                 return true;
             } catch (Exception e) { return false; }
+        }
+
+        // Liga/desliga a passagem dos vídeos da TV ao vivo pelo app.
+        @JavascriptInterface
+        public void modoAoVivo(boolean ligado) { aoVivo = ligado; }
+
+        // Cabeçalhos que o canal exige (vêm da lista M3U, linhas #EXTVLCOPT).
+        @JavascriptInterface
+        public void prepararCanal(String referer, String userAgent) {
+            canalReferer = referer == null ? "" : referer;
+            canalUA = userAgent == null ? "" : userAgent;
         }
 
         // Mantém a tela acesa enquanto um vídeo toca.

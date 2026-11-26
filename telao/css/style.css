@@ -465,12 +465,14 @@ button, input, select { font: inherit; color: inherit; }
 .chtxt b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chtxt small { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lbl { align-self: flex-start; margin-top: 3px; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 5px; background: rgba(255, 255, 255, 0.1); color: #cdd2da; }
-.lbl.vlc { background: rgba(255, 136, 0, 0.18); color: #ffb35c; }
+.lbl.ok { background: rgba(62, 207, 142, 0.16); color: var(--free); }
+.lbl.off { background: rgba(255, 255, 255, 0.06); color: var(--muted); }
+.note {
+  margin: 4px 0 12px; padding: 12px 16px; border-radius: 12px; font-size: 14.5px; color: #d2d6de;
+  background: rgba(245, 179, 1, 0.08); border: 1px solid rgba(245, 179, 1, 0.25); max-width: 80ch;
+}
 .chrow .ch { flex: 0 0 250px; }
 
-.vlchelp { margin-top: 28px; }
-.vlchelp summary { cursor: pointer; font-weight: 700; font-size: 17px; }
-.vlchelp .steps { margin: 14px 0 0; }
 .tvpage > .small { margin-top: 16px; max-width: 80ch; }
 .tvpage a:not(.chip):not(.ch):not(.btn) { color: var(--accent); }
 

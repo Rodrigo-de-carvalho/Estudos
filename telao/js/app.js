@@ -9,6 +9,25 @@
   const view = $('#view');
   let renderToken = 0;
   let heroTimer = null;
+  let rowObserver = null;
+
+  // Executa fn só quando o elemento chega perto da tela (economiza dados e deixa o início mais rápido).
+  function lazy(el, fn) {
+    if (!('IntersectionObserver' in window)) { fn(); return; }
+    if (!rowObserver) {
+      rowObserver = new IntersectionObserver((entries) => {
+        entries.forEach((e) => {
+          if (!e.isIntersecting) return;
+          rowObserver.unobserve(e.target);
+          const f = e.target._lazy;
+          e.target._lazy = null;
+          if (f) f();
+        });
+      }, { rootMargin: '700px 0px' });
+    }
+    el._lazy = fn;
+    rowObserver.observe(el);
+  }
 
   /* ---------------- utilidades ---------------- */
 
@@ -80,8 +99,12 @@
   function cardHTML(it, opts) {
     const o = opts || {};
     const href = o.href || hrefOf(it);
+    // Capas do TMDB: versão menor no celular, maior em telas grandes.
+    const srcset = it.poster && it.poster.includes('/w342/')
+      ? ` srcset="${esc(it.poster.replace('/w342/', '/w185/'))} 185w, ${esc(it.poster)} 342w" sizes="(max-width: 860px) 34vw, 190px"`
+      : '';
     const img = it.poster
-      ? `<img src="${esc(it.poster)}" alt="" loading="lazy" decoding="async">`
+      ? `<img src="${esc(it.poster)}"${srcset} alt="" loading="lazy" decoding="async">`
       : `<span class="noimg">${esc(it.title)}</span>`;
     let badge = '';
     if (it.src === 'ia') badge = '<span class="badge">Grátis aqui</span>';
@@ -119,7 +142,7 @@
     const s = rowEl(title, opts);
     parent.appendChild(s);
     const tok = renderToken;
-    Promise.resolve()
+    lazy(s, () => Promise.resolve()
       .then(loader)
       .then((items) => {
         if (tok !== renderToken) return;
@@ -131,7 +154,7 @@
         if (tok !== renderToken) return;
         console.warn(`Fileira "${title}":`, e);
         s.remove();
-      });
+      }));
     return s;
   }
 
@@ -325,6 +348,10 @@
       p.innerHTML = `<h1 class="ptitle">${isMovie ? 'Filmes' : 'Séries'}</h1>`;
       p.appendChild(keyBanner(false));
       view.appendChild(p);
+      const rows = document.createElement('div');
+      rows.className = 'rows';
+      view.appendChild(rows);
+      T.tv.channelRow(rows, type);
       return;
     }
     const slot = heroSlot(view);
@@ -338,7 +365,8 @@
         slot.remove();
         if (e.status === 401) rows.prepend(keyBanner(true));
       });
-    (isMovie ? MOVIE_ROWS : TV_ROWS).forEach(([title, a, b]) => {
+    (isMovie ? MOVIE_ROWS : TV_ROWS).forEach(([title, a, b], i) => {
+      if (i === 2) T.tv.channelRow(rows, type); // canais 24h de filmes/séries
       const load = typeof a === 'number'
         ? () => api.tmdbList(`/discover/${type}`, { with_genres: a, sort_by: 'popularity.desc' }, type)
         : () => api.tmdbList(a, b, type);
@@ -529,7 +557,7 @@
     const seasons = type === 'tv' ? (d.seasons || []).filter((s) => s.season_number > 0 && s.episode_count) : [];
 
     view.innerHTML = `<article class="detail">
-      <div class="dback" style="background-image:url('${esc(api.img('w1280', d.backdrop_path))}')"></div>
+      <div class="dback" style="background-image:url('${esc(api.img(api.backdropSize(), d.backdrop_path))}')"></div>
       <div class="dhead">
         ${it.poster ? `<img class="dposter" src="${esc(api.img('w500', d.poster_path))}" alt="">` : '<span class="dposter noimg"></span>'}
         <div class="dinfo">
@@ -986,6 +1014,7 @@
     closeModal();
     T.tv.stop();
     keepAwake(false);
+    if (rowObserver) rowObserver.disconnect();
     view.onclick = null;
     document.body.classList.remove('is-player');
     const raw = location.hash.replace(/^#\/?/, '');
@@ -1027,6 +1056,8 @@
   // Funções compartilhadas com a TV ao vivo (tv.js).
   T.ui = {
     view, $, esc, icon, toast, keepAwake,
+    lazy,
+    token: () => renderToken,
     newToken: () => ++renderToken,
     isCurrent: (t) => t === renderToken,
   };

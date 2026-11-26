@@ -6,8 +6,8 @@ Arquivos usados para gerar o APK com a skill **criar-apk-android**, com ajustes 
   - tela cheia nos vídeos (gira para deitado);
   - vídeo começando sozinho;
   - canais `http://`;
-  - abrir no VLC (ou na Play Store, se o VLC não estiver instalado);
-  - copiar links e manter a tela acesa enquanto toca.
+  - **TV ao vivo pelo app**: enquanto um canal está aberto, o app busca o vídeo do canal por conta própria. Assim não há a trava de CORS dos navegadores, os cabeçalhos especiais da lista (Referer/User-Agent) são enviados e os redirecionamentos são seguidos;
+  - copiar links, salvar listas e manter a tela acesa enquanto toca.
 - `axml.py`: substitui o `scripts/axml.py` da skill. Libera tráfego `http://` e coloca o app no menu de TV Box (Android TV), sem exigir tela de toque.
 
 ## Gerar uma nova versão

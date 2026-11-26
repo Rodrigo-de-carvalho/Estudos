@@ -34,6 +34,12 @@ def main(saida):
 
     html = re.sub(r'<script src="([^"]+)"></script>', script, html)
 
+    # hls.js vai como texto (não é executado na abertura); tv.js roda ele quando um canal é aberto.
+    hls = ler("vendor/hls.min.js")
+    if "</script" in hls.lower():
+        raise SystemExit("ERRO: hls.min.js contém '</script'")
+    html = html.replace("</body>", f'<script type="text/plain" id="hls-src">{hls}</script>\n</body>')
+
     icone = "data:image/svg+xml;base64," + base64.b64encode((RAIZ / "img/icon.svg").read_bytes()).decode()
     html = html.replace('href="img/icon.svg"', f'href="{icone}"').replace('src="img/icon.svg"', f'src="{icone}"')
     html = html.replace('  <link rel="manifest" href="manifest.webmanifest">\n', "")

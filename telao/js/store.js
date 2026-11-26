@@ -86,6 +86,15 @@
     removeTvList(id) {
       write('tvLists', read('tvLists', []).filter((x) => x.id !== id));
     },
+    // Guarda se cada canal abriu ou não da última vez, para mostrar os que funcionam primeiro.
+    tvHealth: () => read('tvHealth', {}),
+    setTvHealth(id, ok) {
+      const all = Object.assign({}, read('tvHealth', {}));
+      all[id] = { ok: !!ok, t: Date.now() };
+      const ids = Object.keys(all);
+      if (ids.length > 2000) ids.sort((x, y) => all[x].t - all[y].t).slice(0, ids.length - 2000).forEach((k) => delete all[k]);
+      write('tvHealth', all);
+    },
     tvLastList: () => read('tvLastList', 'br'),
     setTvLastList: (id) => write('tvLastList', id),
   };

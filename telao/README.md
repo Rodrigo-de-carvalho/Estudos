@@ -28,23 +28,20 @@ Sem a chave do TMDB, o app já funciona com os filmes grátis do Internet Archiv
 
 ## TV ao vivo
 
-- Listas prontas do IPTV-org: Brasil, Em português, Portugal, Notícias, Infantil, Música, Documentários e Mundo todo
-- Filtro por nome e por categoria (Variedades, Notícias, Legislativo, Educação…)
-- Player com troca de canal (botões Anterior/Próximo, lista lateral, PageUp/PageDown ou os botões de canal do controle)
-- Favoritos (aparecem também no Início como "Seus canais") e "Vistos por último"
-- **Adicionar lista**: cole o link de qualquer lista M3U ou abra um arquivo `.m3u` do aparelho
-- **VLC**:
-  - **Abrir no VLC**: no Android, abre o canal direto no app do VLC. No iPhone, usa o link do VLC para iOS. No computador, baixa um `.m3u` daquele canal.
-  - **Baixar lista (.m3u)**: baixa todos os canais filtrados, para abrir no VLC.
-  - **Copiar link da lista**: para colar em *Mídia → Abrir fluxo de rede* no VLC.
+- Listas prontas do IPTV-org: Brasil, Em português, **Filmes 24h**, **Séries 24h**, Clássicos, Desenhos, Infantil, Notícias, Música, Documentários, Portugal e Mundo todo
+- As abas Filmes e Séries também mostram canais 24h de filmes e de séries (os em português primeiro)
+- Filtro por nome e por categoria
+- Player com troca de canal (Anterior/Próximo, lista lateral, PageUp/PageDown ou os botões de canal do controle)
+- Os canais que já abriram aparecem primeiro com "Funcionou"; os que falharam vão para o fim com "Não abriu"
+- Favoritos (aparecem no Início como "Seus canais") e "Vistos por último"
+- **Adicionar lista**: link de uma lista M3U ou arquivo `.m3u` do aparelho
 
-Os canais tocam com o player do próprio navegador ou com o [hls.js](https://github.com/video-dev/hls.js) (incluído em `vendor/`, licença Apache 2.0).
-Alguns canais não tocam no navegador:
-- os que exigem cabeçalhos especiais (marcados "Só no VLC");
-- servidores que bloqueiam acesso vindo de sites;
-- canais só em `http://` quando o Telão está publicado em `https://`.
+**No app Android os canais abrem bem melhor que no navegador.** No navegador, a maioria dos servidores de IPTV
+bloqueia a leitura por sites (CORS). No app, o vídeo passa pelo próprio app e essa trava não existe.
 
-Para esses, use o botão do VLC. Também há canais que ficam fora do ar ou que só funcionam no país de origem.
+O IPTV-org só tem canais ao vivo. Ele não tem filmes e séries sob demanda; esses vêm do TMDB (catálogo) e do Internet Archive (filmes completos).
+
+O [hls.js](https://github.com/video-dev/hls.js) (em `vendor/`, licença Apache 2.0) só é carregado quando um canal é aberto.
 
 ## Como rodar
 
@@ -77,7 +74,7 @@ Como é um site estático, qualquer hospedagem gratuita serve:
 
 O Telão também vira um app Android instalável. A pasta `android/` tem os arquivos e as instruções
 (`android/LEIA-ME.md`), e `ferramentas/montar_html_unico.py` junta tudo num só `index.html` para o app.
-Dentro do app, os botões do VLC, de salvar lista e de copiar link usam as funções do próprio Android.
+Dentro do app, salvar lista, copiar link e a TV ao vivo usam as funções do próprio Android.
 
 ## Arquivos
 
@@ -91,7 +88,7 @@ telao/
 └── js/
     ├── store.js          o que fica salvo no navegador (chave, lista, progresso)
     ├── api.js            conversa com o TMDB e o Internet Archive
-    ├── tv.js             TV ao vivo: leitura de M3U, player HLS, favoritos e VLC
+    ├── tv.js             TV ao vivo: leitura de M3U, player HLS e favoritos
     └── app.js            telas, rotas (#/filmes, #/t/...), player e navegação por setas
 ```
 
