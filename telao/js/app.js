@@ -108,13 +108,15 @@
       : `<span class="noimg">${esc(it.title)}</span>`;
     let badge = '';
     if (it.src === 'ia') badge = '<span class="badge">Grátis aqui</span>';
-    else if (it.type === 'tv') badge = '<span class="badge alt">Série</span>';
+    else if (it.type === 'tv' && !o.noBadge) badge = '<span class="badge alt">Série</span>';
     const bar = o.progress
       ? `<span class="pbar"><i style="width:${Math.round(Math.min(1, o.progress) * 100)}%"></i></span>`
       : '';
+    const rate = it.rating && !o.progress ? `<span class="rate">${icon('star')}${it.rating.toFixed(1)}</span>` : '';
+    const sub = o.sub || [it.year, (it.genres || []).slice(0, 2).join(', ')].filter(Boolean).join(' • ');
     return `<a class="card" href="${href}" data-nav title="${esc(it.title)}">
-      <span class="poster">${img}${badge}${bar}</span>
-      <span class="cap"><b>${esc(it.title)}</b><small>${esc(o.sub || it.year || '')}</small></span>
+      <span class="poster">${img}${badge}${rate}${bar}</span>
+      <span class="cap"><b>${esc(it.title)}</b><small>${esc(sub)}</small></span>
     </a>`;
   }
 
@@ -210,11 +212,12 @@
          <a class="btn ghost" href="${hrefOf(it)}" data-nav>${icon('info')}<span>Detalhes</span></a>`
       : `<a class="btn primary" href="${hrefOf(it)}" data-nav>${icon('info')}<span>Mais informações</span></a>
          <button class="btn ghost" data-trailer="${esc(reg(it))}" data-nav>${icon('play')}<span>Trailer</span></button>`;
-    const tag = isIa
-      ? '<span class="tag">Filme completo, grátis</span>'
-      : `<span class="tag">${it.type === 'tv' ? 'Série' : 'Filme'}${it.year ? ' · ' + esc(it.year) : ''}${
-          it.rating ? ` · ${icon('star')} ${it.rating.toFixed(1)}` : ''
-        }</span>`;
+    const tag = `<div class="hmeta">
+        <span class="htype${isIa ? ' free' : ''}">${isIa ? 'Filme completo, grátis' : it.type === 'tv' ? 'Série' : 'Filme'}</span>
+        ${it.year ? `<span>${esc(it.year)}</span>` : ''}
+        ${it.rating ? `<span class="hrate">${icon('star')} ${it.rating.toFixed(1)}</span>` : ''}
+        ${(it.genres || []).length ? `<span class="hgen">${esc(it.genres.join(' • '))}</span>` : ''}
+      </div>`;
     return `<div class="hero-bg${isIa ? ' soft' : ''}" style="background-image:url('${esc(it.backdrop)}')"></div>
       ${isIa ? `<img class="hero-poster" src="${esc(it.poster)}" alt="">` : ''}
       <div class="hero-content">
@@ -238,10 +241,18 @@
       hero.innerHTML =
         heroHTML(items[i]) +
         (items.length > 1
-          ? `<div class="dots">${items.map((_, j) => `<span class="${j === i ? 'on' : ''}"></span>`).join('')}</div>`
+          ? `<button class="harrow l" data-hero="-1" tabindex="-1" aria-label="Destaque anterior">${icon('left')}</button>
+             <button class="harrow r" data-hero="1" tabindex="-1" aria-label="Próximo destaque">${icon('right')}</button>
+             <div class="dots">${items.map((_, j) => `<button class="${j === i ? 'on' : ''}" data-dot="${j}" tabindex="-1" aria-label="Destaque ${j + 1}"></button>`).join('')}</div>`
           : '');
     };
     draw();
+    hero.addEventListener('click', (e) => {
+      const a = e.target.closest('[data-hero],[data-dot]');
+      if (!a) return;
+      i = a.dataset.dot != null ? +a.dataset.dot : (i + +a.dataset.hero + items.length) % items.length;
+      draw();
+    });
     clearInterval(heroTimer);
     if (items.length > 1) {
       heroTimer = setInterval(() => {
@@ -306,7 +317,9 @@
     );
     asyncRow(rows, 'Assista aqui, grátis', () => api.iaCatList('populares').then((r) => r.items), { more: '#/gratis' });
     asyncRow(rows, 'Filmes populares', () => api.tmdbList('/movie/popular', { region: 'BR' }, 'movie'), { more: '#/filmes' });
-    asyncRow(rows, 'Séries populares', () => api.tmdbList('/tv/popular', {}, 'tv'), { more: '#/series' });
+    asyncRow(rows, 'Séries populares', () => api.catalogPage('series', '', 'popularidade', 1).then((r) => r.items), { more: '#/series' });
+    asyncRow(rows, 'Animes em alta', () => api.catalogPage('animes', '', 'popularidade', 1).then((r) => r.items), { more: '#/animes' });
+    asyncRow(rows, 'Doramas em alta', () => api.catalogPage('doramas', '', 'popularidade', 1).then((r) => r.items), { more: '#/doramas' });
     asyncRow(rows, 'Nos cinemas', () => api.tmdbList('/movie/now_playing', { region: 'BR' }, 'movie'));
     asyncRow(rows, 'Produções brasileiras', () =>
       api.tmdbList('/discover/movie', { with_origin_country: 'BR', sort_by: 'popularity.desc' }, 'movie')
@@ -315,63 +328,101 @@
     asyncRow(rows, 'Os mais bem avaliados', () => api.tmdbList('/movie/top_rated', {}, 'movie'));
   }
 
-  const MOVIE_ROWS = [
-    ['Populares', '/movie/popular', { region: 'BR' }],
-    ['Nos cinemas', '/movie/now_playing', { region: 'BR' }],
-    ['Grátis com anúncios no Brasil', '/discover/movie', { watch_region: 'BR', with_watch_monetization_types: 'free|ads', sort_by: 'popularity.desc' }],
-    ['Ação', 28], ['Comédia', 35], ['Drama', 18], ['Terror', 27], ['Ficção científica', 878],
-    ['Animação', 16], ['Romance', 10749], ['Suspense', 53], ['Documentários', 99],
-    ['Produções brasileiras', '/discover/movie', { with_origin_country: 'BR', sort_by: 'popularity.desc' }],
-    ['Mais bem avaliados', '/movie/top_rated', {}],
-  ];
-
-  const TV_ROWS = [
-    ['Populares', '/tv/popular', {}],
-    ['No ar esta semana', '/tv/on_the_air', {}],
-    ['Grátis com anúncios no Brasil', '/discover/tv', { watch_region: 'BR', with_watch_monetization_types: 'free|ads', sort_by: 'popularity.desc' }],
-    ['Ação e aventura', 10759], ['Comédia', 35], ['Drama', 18], ['Crime', 80],
-    ['Ficção e fantasia', 10765], ['Animação', 16],
-    ['Animes', '/discover/tv', { with_genres: 16, with_original_language: 'ja', sort_by: 'popularity.desc' }],
-    ['Reality shows', 10764], ['Documentários', 99],
-    ['Produções brasileiras', '/discover/tv', { with_origin_country: 'BR', sort_by: 'popularity.desc' }],
-    ['Mais bem avaliadas', '/tv/top_rated', {}],
-  ];
-
-  function renderTmdbHub(type) {
-    const isMovie = type === 'movie';
-    document.title = (isMovie ? 'Filmes' : 'Séries') + ' · Telão';
+  function renderCatalog(key, q) {
+    const c = api.CATALOGS[key];
+    document.title = c.title + ' · Telão';
     const tok = ++renderToken;
     view.innerHTML = '';
+    const canais = key === 'filmes' || key === 'series';
     if (!store.getKey()) {
       const p = document.createElement('div');
       p.className = 'page';
-      p.innerHTML = `<h1 class="ptitle">${isMovie ? 'Filmes' : 'Séries'}</h1>`;
+      p.innerHTML = `<h1 class="ptitle">${esc(c.title)}</h1>`;
       p.appendChild(keyBanner(false));
       view.appendChild(p);
-      const rows = document.createElement('div');
-      rows.className = 'rows';
-      view.appendChild(rows);
-      T.tv.channelRow(rows, type);
+      if (canais) {
+        const rows = document.createElement('div');
+        rows.className = 'rows';
+        view.appendChild(rows);
+        T.tv.channelRow(rows, c.type);
+      }
       return;
     }
     const slot = heroSlot(view);
     const rows = document.createElement('div');
     rows.className = 'rows';
     view.appendChild(rows);
-    api.tmdbList(`/trending/${type}/week`, {}, type)
+    (c.trending ? api.tmdbList(c.trending, {}, c.type) : api.catalogPage(key, '', 'popularidade', 1).then((r) => r.items))
       .then((items) => tok === renderToken && mountHero(slot, items))
       .catch((e) => {
         if (tok !== renderToken) return;
         slot.remove();
         if (e.status === 401) rows.prepend(keyBanner(true));
       });
-    (isMovie ? MOVIE_ROWS : TV_ROWS).forEach(([title, a, b], i) => {
-      if (i === 2) T.tv.channelRow(rows, type); // canais 24h de filmes/séries
-      const load = typeof a === 'number'
-        ? () => api.tmdbList(`/discover/${type}`, { with_genres: a, sort_by: 'popularity.desc' }, type)
-        : () => api.tmdbList(a, b, type);
-      asyncRow(rows, title, load);
+    if (canais) T.tv.channelRow(rows, c.type);
+
+    const st = {
+      genre: q.g && /^\d+$/.test(q.g) ? q.g : '',
+      sort: api.SORTS.some((x) => x[0] === q.o) ? q.o : 'popularidade',
+      page: 0, pages: 1, seq: 0,
+    };
+    const sec = document.createElement('section');
+    sec.className = 'catalog';
+    sec.innerHTML = `<div class="cat-head"><h2>Explorar ${esc(c.title.toLowerCase())}</h2>
+        <label class="sortsel"><span>Ordenar por</span><select data-nav>${api.SORTS.map(([v, l]) =>
+          `<option value="${v}"${v === st.sort ? ' selected' : ''}>${l}</option>`).join('')}</select></label></div>
+      <div class="chips-nav" role="group" aria-label="Gêneros">${c.genres.map(([l, id]) => {
+        const on = String(id || '') === st.genre;
+        return `<button class="chip${on ? ' on' : ''}" data-genre="${id || ''}" data-nav aria-pressed="${on}">${esc(l)}</button>`;
+      }).join('')}</div>
+      <div class="grid">${skeleton(12)}</div>
+      <div class="loadmore"></div>`;
+    rows.appendChild(sec);
+    const grid = $('.grid', sec);
+    const more = $('.loadmore', sec);
+
+    const load = (reset) => {
+      if (reset) { st.page = 0; st.seq++; grid.innerHTML = skeleton(12); more.innerHTML = ''; }
+      else more.innerHTML = '<div class="spinner"></div>';
+      const mine = st.seq;
+      const page = ++st.page;
+      api.catalogPage(key, st.genre, st.sort, page).then((r) => {
+        if (tok !== renderToken || mine !== st.seq) return;
+        if (page === 1) grid.innerHTML = r.items.length ? '' : '<p class="muted">Nada encontrado com esse filtro.</p>';
+        st.pages = r.pages;
+        grid.insertAdjacentHTML('beforeend', r.items.map((i) => cardHTML(i, { noBadge: true })).join(''));
+        more.innerHTML = page < r.pages ? '<button class="btn ghost" data-more data-nav>Carregar mais</button>' : '';
+      }).catch(() => {
+        if (tok !== renderToken || mine !== st.seq) return;
+        st.page--;
+        if (page === 1) grid.innerHTML = '';
+        more.innerHTML = '<button class="btn ghost" data-more data-nav>Tentar de novo</button>';
+      });
+    };
+    const setUrl = () => {
+      const p = new URLSearchParams();
+      if (st.genre) p.set('g', st.genre);
+      if (st.sort !== 'popularidade') p.set('o', st.sort);
+      const qs = p.toString();
+      history.replaceState(null, '', `#/${key}${qs ? '?' + qs : ''}`);
+    };
+    sec.addEventListener('click', (e) => {
+      const g = e.target.closest('[data-genre]');
+      if (g) {
+        st.genre = g.dataset.genre;
+        sec.querySelectorAll('[data-genre]').forEach((b) => {
+          const on = b === g;
+          b.classList.toggle('on', on);
+          b.setAttribute('aria-pressed', String(on));
+        });
+        setUrl();
+        load(true);
+        return;
+      }
+      if (e.target.closest('[data-more]')) load(false);
     });
+    $('select', sec).addEventListener('change', (e) => { st.sort = e.target.value; setUrl(); load(true); });
+    lazy(sec, () => load(true));
   }
 
   function renderFree() {
@@ -450,40 +501,74 @@
     document.title = 'Buscar · Telão';
     const tok = ++renderToken;
     view.innerHTML = `<div class="page">
+      <h1 class="ptitle">Buscar</h1>
       <form class="bigsearch" role="search">
         ${icon('search')}
-        <input type="search" placeholder="Nome do filme ou da série" aria-label="Buscar" value="${esc(initial)}" data-nav autocomplete="off">
+        <input type="search" placeholder="Filmes, séries, animes, doramas…" aria-label="Buscar" value="${esc(initial)}" data-nav autocomplete="off">
       </form>
+      <div class="recent"></div>
       <div class="results"></div>
     </div>`;
     const input = $('.bigsearch input', view);
     const out = $('.results', view);
+    const recent = $('.recent', view);
     let seq = 0;
+    let current = '';
+
+    const showRecent = () => {
+      const r = store.recentSearches();
+      recent.innerHTML = r.length
+        ? `<div class="recent-head"><h2>Buscas recentes</h2><button class="linkbtn" data-clear-recent data-nav>Limpar</button></div>
+           <div class="chips-nav">${r.map((x) => `<button class="chip" data-q="${esc(x)}" data-nav>${esc(x)}</button>`).join('')}</div>`
+        : '';
+    };
 
     const run = (q) => {
       q = q.trim();
+      current = q;
       const mine = ++seq;
       history.replaceState(null, '', q ? `#/busca/${encodeURIComponent(q)}` : '#/busca');
       if (!q) {
+        showRecent();
         out.innerHTML = '<p class="muted">Digite para buscar no catálogo e nos filmes grátis.</p>';
         return;
       }
+      recent.innerHTML = '';
       const hasKey = !!store.getKey();
-      out.innerHTML = `${hasKey ? '<section><h2>Filmes e séries</h2><div class="grid g-tmdb"><div class="spinner"></div></div></section>' : ''}
-        <section><h2>Assista aqui, grátis</h2><div class="grid g-ia"><div class="spinner"></div></div></section>
+      out.innerHTML = `${hasKey ? `<section><h2>Filmes e séries</h2><div class="grid g-tmdb">${skeleton(6)}</div><div class="loadmore"></div></section>` : ''}
+        <section><h2>Assista aqui, grátis</h2><div class="grid g-ia">${skeleton(6)}</div></section>
         ${hasKey ? '' : '<p class="muted">Conecte o TMDB em <a href="#/config">Configurações</a> para buscar em todos os filmes e séries.</p>'}`;
-      const fill = (sel, p, emptyMsg) =>
-        p.then((items) => {
-          if (mine !== seq || tok !== renderToken) return;
-          $(sel, out).innerHTML = items.length
-            ? items.map((i) => cardHTML(i)).join('')
-            : `<p class="muted">${emptyMsg}</p>`;
-        }).catch(() => {
-          if (mine !== seq || tok !== renderToken) return;
-          $(sel, out).innerHTML = '<p class="muted">A busca falhou. Confira sua conexão.</p>';
-        });
-      if (hasKey) fill('.g-tmdb', api.tmdbSearch(q), 'Nada encontrado no catálogo.');
-      fill('.g-ia', api.iaFind(q).then((r) => r.items), 'Nenhum filme grátis com esse nome.');
+      const ok = () => mine === seq && tok === renderToken;
+      if (hasKey) {
+        const grid = $('.g-tmdb', out);
+        const more = $('.g-tmdb + .loadmore', out);
+        let page = 0;
+        const loadPage = () => {
+          page++;
+          if (page > 1) more.innerHTML = '<div class="spinner"></div>';
+          api.tmdbSearch(q, page).then((r) => {
+            if (!ok()) return;
+            if (page === 1) grid.innerHTML = r.items.length ? '' : '<p class="muted">Nada encontrado no catálogo.</p>';
+            grid.insertAdjacentHTML('beforeend', r.items.map((i) => cardHTML(i)).join(''));
+            more.innerHTML = page < r.pages ? '<button class="btn ghost" data-nav>Carregar mais</button>' : '';
+            const b = $('button', more);
+            if (b) b.addEventListener('click', loadPage);
+          }).catch(() => {
+            if (!ok()) return;
+            if (page === 1) grid.innerHTML = '<p class="muted">A busca falhou. Confira sua conexão.</p>';
+            else { page--; more.innerHTML = ''; }
+          });
+        };
+        loadPage();
+      }
+      api.iaFind(q).then((r) => {
+        if (!ok()) return;
+        $('.g-ia', out).innerHTML = r.items.length
+          ? r.items.map((i) => cardHTML(i)).join('')
+          : '<p class="muted">Nenhum filme grátis com esse nome.</p>';
+      }).catch(() => {
+        if (ok()) $('.g-ia', out).innerHTML = '<p class="muted">A busca falhou. Confira sua conexão.</p>';
+      });
     };
 
     let timer;
@@ -494,9 +579,17 @@
     $('.bigsearch', view).addEventListener('submit', (e) => {
       e.preventDefault();
       clearTimeout(timer);
+      store.addRecentSearch(input.value);
       run(input.value);
       input.blur();
     });
+    view.onclick = (e) => {
+      const chip = e.target.closest('[data-q]');
+      if (chip) { input.value = chip.dataset.q; store.addRecentSearch(chip.dataset.q); run(chip.dataset.q); return; }
+      if (e.target.closest('[data-clear-recent]')) { store.clearRecentSearches(); showRecent(); return; }
+      // Guardar a busca quando a pessoa abre um resultado.
+      if (e.target.closest('.results .card') && current) store.addRecentSearch(current);
+    };
     run(initial || '');
     if (!initial) input.focus();
   }
@@ -593,9 +686,11 @@
           <b>${esc(c.name)}</b><small>${esc(c.character || '')}</small></div>`).join('')}</div></div></section>` : ''}
     </article>`;
 
-    const similar = ((d.similar && d.similar.results) || []).map((r) => api.fromTmdb(r, type)).filter((i) => i && i.poster);
+    const recs = (d.recommendations && d.recommendations.results && d.recommendations.results.length
+      ? d.recommendations.results : (d.similar && d.similar.results) || []);
+    const similar = recs.map((r) => api.fromTmdb(r, type)).filter((i) => i && i.poster);
     if (similar.length) {
-      const s = rowEl(type === 'tv' ? 'Séries parecidas' : 'Filmes parecidos');
+      const s = rowEl('Você também pode gostar');
       s.querySelector('.scroller').innerHTML = similar.map((i) => cardHTML(i)).join('');
       $('.detail', view).appendChild(s);
     }
@@ -822,6 +917,22 @@
     });
   }
 
+  function renderMore() {
+    ++renderToken;
+    document.title = 'Mais · Telão';
+    const links = [
+      ['#/animes', 'Animes', 'Séries japonesas de animação'],
+      ['#/doramas', 'Doramas', 'Séries coreanas'],
+      ['#/tv', 'TV ao vivo', 'Canais abertos e gratuitos'],
+      ['#/gratis', 'Assista grátis', 'Filmes completos em domínio público'],
+      ['#/busca', 'Buscar', 'Filmes, séries e clássicos'],
+      ['#/config', 'Configurações', 'Chave do TMDB e seus dados'],
+    ];
+    view.innerHTML = `<div class="page narrow"><h1 class="ptitle">Mais</h1>
+      <nav class="morelist" aria-label="Mais seções">${links.map(([h, t, d]) =>
+        `<a href="${h}" data-nav><span><b>${t}</b><small>${d}</small></span>${icon('right')}</a>`).join('')}</nav></div>`;
+  }
+
   function renderNotFound() {
     ++renderToken;
     document.title = 'Não encontrado · Telão';
@@ -921,14 +1032,6 @@
     }
   }, true);
 
-  $('#hsearch').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const inp = $('#hsearch input');
-    const q = inp.value.trim();
-    inp.blur();
-    location.hash = q ? `#/busca/${encodeURIComponent(q)}` : '#/busca';
-  });
-
   const top = $('#top');
   const onScroll = () => top.classList.toggle('scrolled', window.scrollY > 10);
   window.addEventListener('scroll', onScroll, { passive: true });
@@ -1003,7 +1106,7 @@
 
   function setActive(sec) {
     document.querySelectorAll('[data-sec]').forEach((el) => {
-      const on = el.dataset.sec === sec;
+      const on = el.dataset.sec === sec || (!!sec && !!el.dataset.also && el.dataset.also.split(' ').includes(sec));
       el.classList.toggle('active', on);
       if (on) el.setAttribute('aria-current', 'page'); else el.removeAttribute('aria-current');
     });
@@ -1017,32 +1120,28 @@
     if (rowObserver) rowObserver.disconnect();
     view.onclick = null;
     document.body.classList.remove('is-player');
-    const raw = location.hash.replace(/^#\/?/, '');
+    const [raw, qs] = location.hash.replace(/^#\/?/, '').split('?');
+    const query = {};
+    new URLSearchParams(qs || '').forEach((v, k) => { query[k] = v; });
     const parts = raw.split('/').filter(Boolean).map((s) => {
       try { return decodeURIComponent(s); } catch (e) { return s; }
     });
     const sec = parts[0] || '';
-    setActive(['filmes', 'series', 'gratis', 'tv', 'lista', 'config'].includes(sec) ? sec : sec === '' ? '' : null);
+    setActive(['filmes', 'series', 'animes', 'doramas', 'gratis', 'tv', 'lista', 'config', 'mais', 'busca'].includes(sec) ? sec : sec === '' ? '' : null);
     window.scrollTo(0, 0);
     onScroll();
-    const hs = $('#hsearch input');
-    if (sec !== 'busca') hs.value = '';
 
     switch (sec) {
       case '': return renderHome();
-      case 'filmes': return renderTmdbHub('movie');
-      case 'series': return renderTmdbHub('tv');
+      case 'filmes': case 'series': case 'animes': case 'doramas': return renderCatalog(sec, query);
+      case 'mais': return renderMore();
       case 'gratis': return parts[1] ? renderIaGrid(parts[1]) : renderFree();
       case 'lista': return renderList();
       case 'tv':
         if (parts[1] === 'ver') return T.tv.player(parts[2], parts[3]);
         if (parts[1] === 'adicionar') return T.tv.add();
         return T.tv.home(parts[1]);
-      case 'busca': {
-        const q = parts.slice(1).join('/');
-        hs.value = q;
-        return renderSearch(q);
-      }
+      case 'busca': return renderSearch(parts.slice(1).join('/'));
       case 't':
         if (parts[1] === 'ia') return renderIaDetail(parts[2]);
         if (parts[1] === 'tmdb') return renderTmdbDetail(parts[2], parts[3]);

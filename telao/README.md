@@ -17,7 +17,10 @@ Sem a chave do TMDB, o app já funciona com os filmes grátis do Internet Archiv
 ## O que tem
 
 - Início com destaque rotativo e fileiras: em alta, grátis com anúncios no Brasil, populares, nos cinemas, produções brasileiras…
-- Abas de Filmes e Séries com fileiras por gênero (inclui animes e reality shows)
+- Abas de **Filmes, Séries, Animes e Doramas** com filtro por gênero, ordem (mais populares, mais bem avaliados, mais recentes, título) e "Carregar mais"
+- Visual inspirado no Cinelume: cabeçalho com todas as seções, destaque com ano, nota e gêneros, capas com nota e gêneros, menu "Mais" no celular
+- Página de cada título com recomendações ("Você também pode gostar")
+- Busca com buscas recentes e "Carregar mais"
 - Página de cada título com trailer, elenco, temporadas e episódios, e **onde assistir no Brasil**
 - **Assista grátis**: filmes completos por categoria (terror, comédia, noir, faroeste, cinema mudo, desenhos…), com "Ver tudo" e "Carregar mais"
 - Player que lembra onde você parou, com fileira **Continuar assistindo**

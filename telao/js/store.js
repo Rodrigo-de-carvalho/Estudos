@@ -47,6 +47,16 @@
     },
     clearList: () => write('list', []),
 
+    recentSearches: () => read('recentSearches', []),
+    addRecentSearch(q) {
+      q = String(q || '').trim();
+      if (q.length < 2) return;
+      const l = read('recentSearches', []).filter((x) => x.toLowerCase() !== q.toLowerCase());
+      l.unshift(q);
+      write('recentSearches', l.slice(0, 8));
+    },
+    clearRecentSearches: () => write('recentSearches', []),
+
     progressList: () => Object.values(read('progress', {})).sort((a, b) => b.updated - a.updated),
     getProgress: (id) => read('progress', {})[id] || null,
     setProgress(it, p) {

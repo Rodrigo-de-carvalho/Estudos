@@ -99,6 +99,72 @@
     return getJSON(req.url, { headers: req.headers });
   }
 
+  // Nomes dos gêneros do TMDB em português (filmes e séries), para mostrar nas capas.
+  const GENRE_NAMES = {
+    28: 'Ação', 12: 'Aventura', 16: 'Animação', 35: 'Comédia', 80: 'Crime', 99: 'Documentário', 18: 'Drama',
+    10751: 'Família', 14: 'Fantasia', 36: 'História', 27: 'Terror', 10402: 'Música', 9648: 'Mistério',
+    10749: 'Romance', 878: 'Ficção científica', 10770: 'Filme para TV', 53: 'Suspense', 10752: 'Guerra',
+    37: 'Faroeste', 10759: 'Ação e aventura', 10762: 'Infantil', 10763: 'Notícias', 10764: 'Reality',
+    10765: 'Ficção e fantasia', 10766: 'Novela', 10767: 'Talk show', 10768: 'Guerra e política',
+  };
+
+  /* Catálogos com filtro de gênero e ordem (abas Filmes, Séries, Animes e Doramas). */
+  const CATALOGS = {
+    filmes: {
+      title: 'Filmes', type: 'movie', trending: '/trending/movie/week', base: {},
+      genres: [['Todos'], ['Ação', 28], ['Aventura', 12], ['Comédia', 35], ['Drama', 18], ['Ficção científica', 878],
+        ['Terror', 27], ['Suspense', 53], ['Romance', 10749], ['Animação', 16], ['Família', 10751], ['Documentário', 99]],
+    },
+    series: {
+      title: 'Séries', type: 'tv', trending: '/trending/tv/week', base: { without_genres: '16' },
+      genres: [['Todas'], ['Drama', 18], ['Crime', 80], ['Ficção e fantasia', 10765], ['Ação e aventura', 10759],
+        ['Mistério', 9648], ['Comédia', 35], ['Reality', 10764], ['Documentário', 99]],
+    },
+    animes: {
+      title: 'Animes', type: 'tv', base: { with_genres: '16', with_original_language: 'ja' },
+      genres: [['Todos'], ['Ação e aventura', 10759], ['Comédia', 35], ['Drama', 18], ['Ficção e fantasia', 10765],
+        ['Mistério', 9648], ['Família', 10751]],
+    },
+    doramas: {
+      title: 'Doramas', type: 'tv', base: { with_original_language: 'ko', without_genres: '16,10764,10767' },
+      genres: [['Todos'], ['Drama', 18], ['Comédia', 35], ['Ação e aventura', 10759], ['Crime', 80],
+        ['Mistério', 9648], ['Ficção e fantasia', 10765]],
+    },
+  };
+  const SORTS = [['popularidade', 'Mais populares'], ['nota', 'Mais bem avaliados'], ['recentes', 'Mais recentes'], ['titulo', 'Título (A–Z)']];
+
+  function catalogParams(key, genre, sort) {
+    const c = CATALOGS[key];
+    const movie = c.type === 'movie';
+    const p = Object.assign({}, c.base);
+    if (genre) p.with_genres = p.with_genres ? `${p.with_genres},${genre}` : String(genre);
+    const today = new Date().toISOString().slice(0, 10);
+    if (sort === 'nota') { p.sort_by = 'vote_average.desc'; p['vote_count.gte'] = movie ? 300 : 150; }
+    else if (sort === 'recentes') {
+      p.sort_by = movie ? 'primary_release_date.desc' : 'first_air_date.desc';
+      p[movie ? 'primary_release_date.lte' : 'first_air_date.lte'] = today;
+      p['vote_count.gte'] = 20;
+    } else if (sort === 'titulo') { p.sort_by = movie ? 'title.asc' : 'name.asc'; p['vote_count.gte'] = 50; }
+    else p.sort_by = 'popularity.desc';
+    return p;
+  }
+
+  // Uma página de resultados (para grades com "Carregar mais").
+  function tmdbPage(path, params, type, page) {
+    const all = Object.assign({}, params, { page: page || 1 });
+    const key = 'tp:' + path + JSON.stringify(all) + (type || '');
+    return persisted(key, 6 * HOUR, () => tmdb(path, all).then((d) => ({
+      items: (d.results || []).map((r) => fromTmdb(r, type)).filter((i) => i && i.poster),
+      pages: Math.min(d.total_pages || 1, 500),
+      total: d.total_results || 0,
+    })));
+  }
+
+  function catalogPage(key, genre, sort, page) {
+    const c = CATALOGS[key];
+    return tmdbPage(`/discover/${c.type}`, catalogParams(key, genre, sort), c.type, page);
+  }
+
   function fromTmdb(r, forcedType) {
     if (!r) return null;
     const type = forcedType || r.media_type || (r.title != null ? 'movie' : 'tv');
@@ -114,6 +180,7 @@
       backdrop: r.backdrop_path ? IMG + backdropSize() + r.backdrop_path : '',
       overview: r.overview || '',
       rating: r.vote_average || 0,
+      genres: (r.genre_ids || (r.genres || []).map((g) => g.id)).map((g) => GENRE_NAMES[g]).filter(Boolean).slice(0, 3),
     };
   }
 
@@ -127,7 +194,7 @@
 
   function tmdbDetails(type, id) {
     return tmdb(`/${type}/${id}`, {
-      append_to_response: 'videos,credits,watch/providers,similar',
+      append_to_response: 'videos,credits,watch/providers,recommendations,similar',
       include_video_language: 'pt,en,null',
     });
   }
@@ -136,10 +203,11 @@
     return tmdb(`/tv/${id}/season/${n}`);
   }
 
-  function tmdbSearch(q) {
-    return tmdb('/search/multi', { query: q, include_adult: 'false' }).then((d) =>
-      (d.results || []).map((r) => fromTmdb(r)).filter((i) => i && i.poster)
-    );
+  function tmdbSearch(q, page) {
+    return tmdb('/search/multi', { query: q, include_adult: 'false', page: page || 1 }).then((d) => ({
+      items: (d.results || []).map((r) => fromTmdb(r)).filter((i) => i && i.poster),
+      pages: Math.min(d.total_pages || 1, 500),
+    }));
   }
 
   // Escolhe o melhor trailer do YouTube: trailer oficial em português primeiro.
@@ -293,13 +361,14 @@
   const iaPage = (id) => `${IA}/details/${encodeURIComponent(id)}`;
 
   T.api = {
+    CATALOGS, SORTS, catalogPage, tmdbPage,
     tmdb, testKey, tmdbList, tmdbDetails, tmdbSeason, tmdbSearch, fromTmdb, pickTrailer, img,
     IA_CATS, iaCategory, iaCatList, iaFind, iaDetails, iaFileUrl, iaPage, iaThumb,
     backdropSize,
     clearCache() {
       cache.clear();
       const c = pcLoad();
-      Object.keys(c).forEach((k) => { if (k.startsWith('tm:')) delete c[k]; });
+      Object.keys(c).forEach((k) => { if (k.startsWith('tm:') || k.startsWith('tp:')) delete c[k]; });
       pcSave();
     },
   };
