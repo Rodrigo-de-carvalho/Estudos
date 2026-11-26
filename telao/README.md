@@ -73,6 +73,12 @@ Como é um site estático, qualquer hospedagem gratuita serve:
 - **GitHub Pages**: no repositório, vá em *Settings → Pages*, escolha a branch e a pasta, e o app fica em `https://<seu-usuario>.github.io/Estudos/telao/`.
 - **Vercel** ou **Netlify**: importe o repositório e defina `telao` como pasta raiz.
 
+## App Android (APK)
+
+O Telão também vira um app Android instalável. A pasta `android/` tem os arquivos e as instruções
+(`android/LEIA-ME.md`), e `ferramentas/montar_html_unico.py` junta tudo num só `index.html` para o app.
+Dentro do app, os botões do VLC, de salvar lista e de copiar link usam as funções do próprio Android.
+
 ## Arquivos
 
 ```
@@ -93,7 +99,6 @@ telao/
 
 - Guia de programação (EPG) dos canais
 - Legendas nos filmes do Internet Archive que tiverem arquivo `.srt`
-- Empacotar como app Android (com Capacitor ou como TWA)
 - Perfis diferentes para cada pessoa da casa
 
 ---

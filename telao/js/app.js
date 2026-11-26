@@ -49,6 +49,11 @@
     return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
   }
 
+  // Dentro do app Android, mantém a tela acesa enquanto um vídeo toca.
+  function keepAwake(on) {
+    try { if (window.Android && window.Android.manterTelaLigada) window.Android.manterTelaLigada(!!on); } catch (e) { /* ignora */ }
+  }
+
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
   function toast(msg) {
@@ -701,7 +706,8 @@
       last = video.currentTime;
       save();
     });
-    video.addEventListener('pause', save);
+    video.addEventListener('pause', () => { save(); keepAwake(false); });
+    video.addEventListener('playing', () => keepAwake(true));
     video.addEventListener('ended', () => {
       if (part < d.videos.length - 1) {
         store.setProgress(d.item, { t: 0, d: 0, part: part + 1 });
@@ -979,6 +985,7 @@
     clearInterval(heroTimer);
     closeModal();
     T.tv.stop();
+    keepAwake(false);
     view.onclick = null;
     document.body.classList.remove('is-player');
     const raw = location.hash.replace(/^#\/?/, '');
@@ -1019,7 +1026,7 @@
 
   // Funções compartilhadas com a TV ao vivo (tv.js).
   T.ui = {
-    view, $, esc, icon, toast,
+    view, $, esc, icon, toast, keepAwake,
     newToken: () => ++renderToken,
     isCurrent: (t) => t === renderToken,
   };

@@ -172,16 +172,28 @@
     return null;
   }
 
+  // Dentro do app Android (window.Android), salva pelo "Salvar como" do sistema.
+  // Devolve true quando o arquivo foi baixado direto pelo navegador.
   function download(name, text) {
+    if (window.Android && window.Android.salvarArquivo) {
+      window.aoSalvarArquivo = (ok) => ui().toast(ok ? 'Arquivo salvo. Abra ele no VLC.' : 'O arquivo não foi salvo');
+      window.Android.salvarArquivo(text, name, 'audio/x-mpegurl');
+      return false;
+    }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([text], { type: 'audio/x-mpegurl' }));
     a.download = name;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    return true;
   }
 
   async function copy(text) {
+    if (window.Android && window.Android.copiar) {
+      ui().toast(window.Android.copiar(text) ? 'Link copiado' : 'Não deu para copiar');
+      return;
+    }
     try {
       await navigator.clipboard.writeText(text);
       ui().toast('Link copiado');
@@ -193,10 +205,14 @@
   const fileName = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w-]+/g, '-').toLowerCase();
 
   function openInVlc(ch) {
+    if (window.Android && window.Android.abrirNoVlc) {
+      const r = window.Android.abrirNoVlc(ch.url, ch.name);
+      if (r === 'loja') ui().toast('Instale o VLC para assistir este canal');
+      return;
+    }
     const h = vlcHref(ch);
     if (h) { location.href = h; return; }
-    download(`${fileName(ch.name)}.m3u`, toM3U([ch]));
-    ui().toast('Arquivo baixado. Abra ele no VLC.');
+    if (download(`${fileName(ch.name)}.m3u`, toM3U([ch]))) ui().toast('Arquivo baixado. Abra ele no VLC.');
   }
 
   /* ---------------- tela: lista de canais ---------------- */
@@ -327,8 +343,7 @@
       const act = b.dataset.tvact;
       if (act === 'dl') {
         if (!all.length) return;
-        download(`telao-${fileName(info.name)}.m3u`, toM3U(shown.length ? shown : all));
-        U.toast('Lista baixada. Abra no VLC.');
+        if (download(`telao-${fileName(info.name)}.m3u`, toM3U(shown.length ? shown : all))) U.toast('Lista baixada. Abra no VLC.');
       }
       if (act === 'copylist') copy(info.url);
       if (act === 'rmlist' && confirm(`Remover a lista "${info.name}"?`)) {
@@ -366,7 +381,9 @@
         <h2>Por arquivo</h2>
         <p class="muted">Escolha um arquivo .m3u salvo no aparelho.</p>
         <form class="keyform" id="addfile">
-          <input id="lfile" type="file" accept=".m3u,.m3u8,audio/x-mpegurl,application/vnd.apple.mpegurl,text/plain" data-nav>
+          ${window.Android && window.Android.abrirArquivo
+            ? `<button class="btn ghost" type="button" id="lpick" data-nav>${icon('download')}<span>Escolher arquivo</span></button>`
+            : '<input id="lfile" type="file" accept=".m3u,.m3u8,audio/x-mpegurl,application/vnd.apple.mpegurl,text/plain" data-nav>'}
           <p class="status" role="status"></p>
         </form>
       </section>
@@ -401,20 +418,30 @@
       }
     });
 
-    U.$('#lfile', view).addEventListener('change', (e) => {
-      const f = e.target.files[0];
-      const st = U.$('#addfile .status', view);
-      if (!f) return;
-      const rd = new FileReader();
-      rd.onload = () => {
-        const text = String(rd.result || '');
-        if (!/#EXTINF/i.test(text)) { st.textContent = 'Esse arquivo não parece ser uma lista M3U.'; return; }
-        const list = { id: 'f' + Date.now().toString(36), name: f.name.replace(/\.m3u8?$/i, ''), text };
-        loaded.set(list.id, Promise.resolve(parseM3U(text)));
-        finish(list, st);
-      };
-      rd.readAsText(f);
-    });
+    const st = U.$('#addfile .status', view);
+    const fromText = (text, name) => {
+      text = String(text || '');
+      if (!/#EXTINF/i.test(text)) { st.textContent = 'Esse arquivo não parece ser uma lista M3U.'; return; }
+      const list = { id: 'f' + Date.now().toString(36), name, text };
+      loaded.set(list.id, Promise.resolve(parseM3U(text)));
+      finish(list, st);
+    };
+    const pick = U.$('#lpick', view);
+    if (pick) {
+      // App Android: o seletor de arquivos vem do sistema, pela ponte.
+      pick.addEventListener('click', () => {
+        window.aoAbrirArquivo = () => fromText(window.Android.pegarArquivoAberto(), 'Lista do aparelho');
+        window.Android.abrirArquivo();
+      });
+    } else {
+      U.$('#lfile', view).addEventListener('change', (e) => {
+        const f = e.target.files[0];
+        if (!f) return;
+        const rd = new FileReader();
+        rd.onload = () => fromText(rd.result, f.name.replace(/\.m3u8?$/i, ''));
+        rd.readAsText(f);
+      });
+    }
   }
 
   /* ---------------- tela: assistir canal ---------------- */
@@ -427,7 +454,7 @@
     clearTimeout(watchdog);
     if (hls) { try { hls.destroy(); } catch (e) { /* ignora */ } hls = null; }
     if (liveVideo) {
-      liveVideo.onplaying = liveVideo.onerror = null;
+      liveVideo.onplaying = liveVideo.onerror = liveVideo.onpause = null;
       liveVideo.pause();
       liveVideo.removeAttribute('src');
       try { liveVideo.load(); } catch (e) { /* ignora */ }
@@ -497,7 +524,9 @@
       }
     };
 
+    video.onpause = () => U.keepAwake(false);
     video.onplaying = () => {
+      U.keepAwake(true);
       clearTimeout(watchdog);
       load.hidden = true;
       msg.hidden = true;

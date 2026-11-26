@@ -1,0 +1,267 @@
+package __PACOTE__;
+
+import android.app.Activity;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.net.Uri;
+import android.os.Bundle;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
+import android.webkit.JavascriptInterface;
+import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.lang.reflect.Method;
+
+// Tela única: abre assets/index.html num WebView.
+// Ponte para o JavaScript (window.Android): salvarArquivo, abrirArquivo, pegarArquivoAberto,
+// e para o Telão: abrirNoVlc, copiar, manterTelaLigada.
+public class MainActivity extends Activity {
+    private static final boolean INTERNET = __INTERNET__;
+    private static final boolean BLOQUEAR_PRINT = __BLOQUEAR_PRINT__;
+    private static final int REQ_SALVAR = 1, REQ_ABRIR = 2;
+    // Valores literais (as constantes não existem no android.jar antigo usado para compilar).
+    private static final int SCREEN_ORIENTATION_UNSPECIFIED = -1, SCREEN_ORIENTATION_SENSOR_LANDSCAPE = 6;
+    private static final int UI_TELA_CHEIA = 0x2 | 0x4 | 0x100 | 0x200 | 0x400 | 0x1000; // imersivo
+    private WebView web;
+    private FrameLayout raiz;
+    private View telaCheia;
+    private WebChromeClient.CustomViewCallback fecharTelaCheia;
+    private String paraSalvar;
+    private String arquivoAberto;
+
+    @Override
+    protected void onCreate(Bundle saved) {
+        super.onCreate(saved);
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        if (BLOQUEAR_PRINT) getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
+
+        raiz = new FrameLayout(this);
+        raiz.setBackgroundColor(Color.rgb(11, 13, 18));
+        web = new WebView(this);
+        web.setBackgroundColor(Color.rgb(11, 13, 18));
+        WebSettings s = web.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setAllowFileAccess(false);
+        s.setBlockNetworkLoads(!INTERNET);
+        s.setSaveFormData(false);
+        // Vídeo começa sozinho ao abrir um canal (API 17+).
+        chamar(s, "setMediaPlaybackRequiresUserGesture", boolean.class, Boolean.FALSE);
+        // Permite canais http:// dentro da página https (API 21+; 0 = MIXED_CONTENT_ALWAYS_ALLOW).
+        if (INTERNET) chamar(s, "setMixedContentMode", int.class, Integer.valueOf(0));
+
+        web.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                if (url.startsWith("intent:")) {
+                    try {
+                        Intent i = Intent.parseUri(url, 1); // 1 = Intent.URI_INTENT_SCHEME
+                        startActivity(i);
+                    } catch (Exception e) { abrirLoja("org.videolan.vlc"); }
+                    return true;
+                }
+                // Links externos abrem no navegador do celular (só se o app tem internet).
+                if (INTERNET && (url.startsWith("https://") || url.startsWith("http://") || url.startsWith("market:"))) {
+                    try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); } catch (Exception e) { }
+                }
+                return true;
+            }
+        });
+        web.setWebChromeClient(new WebChromeClient() {
+            // Botão de tela cheia dos vídeos.
+            @Override
+            public void onShowCustomView(View view, CustomViewCallback callback) {
+                if (telaCheia != null) { callback.onCustomViewHidden(); return; }
+                telaCheia = view;
+                fecharTelaCheia = callback;
+                raiz.addView(view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                web.setVisibility(View.GONE);
+                getWindow().getDecorView().setSystemUiVisibility(UI_TELA_CHEIA);
+                getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                setRequestedOrientation(SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+            }
+
+            @Override
+            public void onHideCustomView() {
+                if (telaCheia == null) return;
+                raiz.removeView(telaCheia);
+                telaCheia = null;
+                web.setVisibility(View.VISIBLE);
+                getWindow().getDecorView().setSystemUiVisibility(0);
+                setRequestedOrientation(SCREEN_ORIENTATION_UNSPECIFIED);
+                if (fecharTelaCheia != null) fecharTelaCheia.onCustomViewHidden();
+                fecharTelaCheia = null;
+            }
+
+            // Sem isto o WebView mostra um ícone cinza antes do vídeo começar.
+            @Override
+            public Bitmap getDefaultVideoPoster() {
+                return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+            }
+        });
+        web.addJavascriptInterface(new Ponte(), "Android");
+        // A base URL define a "origem" do localStorage. Nunca mude depois de publicar o app.
+        web.loadDataWithBaseURL("__BASE_URL__", lerAsset("index.html"), "text/html", "UTF-8", null);
+        raiz.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        setContentView(raiz);
+    }
+
+    private static void chamar(Object alvo, String metodo, Class<?> tipo, Object valor) {
+        try {
+            Method m = alvo.getClass().getMethod(metodo, tipo);
+            m.invoke(alvo, valor);
+        } catch (Exception e) { }
+    }
+
+    private void abrirLoja(String pacote) {
+        try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + pacote))); }
+        catch (Exception e) {
+            try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=" + pacote))); }
+            catch (Exception e2) { }
+        }
+    }
+
+    private String lerAsset(String nome) {
+        try { return new String(lerTudo(getAssets().open(nome)), "UTF-8"); }
+        catch (Exception e) { return "<p>Erro ao abrir o app.</p>"; }
+    }
+
+    private static byte[] lerTudo(InputStream in) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buf = new byte[16384];
+        int n;
+        while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+        in.close();
+        return out.toByteArray();
+    }
+
+    private void js(final String codigo) {
+        runOnUiThread(new Runnable() { public void run() { web.loadUrl("javascript:" + codigo); } });
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (telaCheia != null) { sairDaTelaCheia(); return; }
+        if (web != null && web.canGoBack()) web.goBack();
+        else super.onBackPressed();
+    }
+
+    private void sairDaTelaCheia() {
+        if (fecharTelaCheia != null) fecharTelaCheia.onCustomViewHidden();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (web != null) web.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (web != null) web.onResume();
+    }
+
+    @Override
+    protected void onActivityResult(int req, int res, Intent data) {
+        Uri uri = (res == RESULT_OK && data != null) ? data.getData() : null;
+        if (req == REQ_SALVAR) {
+            boolean ok = false;
+            if (uri != null && paraSalvar != null) {
+                try {
+                    OutputStream out = getContentResolver().openOutputStream(uri);
+                    out.write(paraSalvar.getBytes("UTF-8"));
+                    out.close();
+                    ok = true;
+                } catch (Exception e) { ok = false; }
+            }
+            paraSalvar = null;
+            js("window.aoSalvarArquivo&&aoSalvarArquivo(" + ok + ")");
+        } else if (req == REQ_ABRIR && uri != null) {
+            try {
+                arquivoAberto = new String(lerTudo(getContentResolver().openInputStream(uri)), "UTF-8");
+                js("window.aoAbrirArquivo&&aoAbrirArquivo()");
+            } catch (Exception e) { arquivoAberto = null; }
+        }
+    }
+
+    public class Ponte {
+        // Abre a tela "Salvar como" do Android. Depois chama window.aoSalvarArquivo(true|false).
+        @JavascriptInterface
+        public void salvarArquivo(String conteudo, String nomeDoArquivo, String tipo) {
+            paraSalvar = conteudo;
+            final Intent i = new Intent("android.intent.action.CREATE_DOCUMENT");
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType(tipo == null || tipo.length() == 0 ? "text/plain" : tipo);
+            i.putExtra(Intent.EXTRA_TITLE, nomeDoArquivo);
+            runOnUiThread(new Runnable() { public void run() {
+                try { startActivityForResult(i, REQ_SALVAR); } catch (Exception e) { js("window.aoSalvarArquivo&&aoSalvarArquivo(false)"); }
+            } });
+        }
+
+        // Abre o seletor de arquivos. Depois chama window.aoAbrirArquivo(); o texto vem de pegarArquivoAberto().
+        @JavascriptInterface
+        public void abrirArquivo() {
+            final Intent i = new Intent("android.intent.action.OPEN_DOCUMENT");
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType("*/*");
+            runOnUiThread(new Runnable() { public void run() {
+                try { startActivityForResult(i, REQ_ABRIR); } catch (Exception e) { }
+            } });
+        }
+
+        @JavascriptInterface
+        public String pegarArquivoAberto() {
+            String p = arquivoAberto;
+            arquivoAberto = null;
+            return p;
+        }
+
+        // Abre um vídeo ou canal no VLC. Se o VLC não estiver instalado, oferece outro player;
+        // se nenhum player abrir, leva para a página do VLC na loja. Devolve "vlc", "outro" ou "loja".
+        @JavascriptInterface
+        public String abrirNoVlc(String url, String titulo) {
+            Uri u = Uri.parse(url);
+            Intent vlc = new Intent(Intent.ACTION_VIEW);
+            vlc.setDataAndType(u, "video/*");
+            vlc.setPackage("org.videolan.vlc");
+            vlc.putExtra("title", titulo);
+            try { startActivity(vlc); return "vlc"; } catch (Exception e) { }
+            Intent outro = new Intent(Intent.ACTION_VIEW);
+            outro.setDataAndType(u, "video/*");
+            try { startActivity(outro); return "outro"; } catch (Exception e) { }
+            abrirLoja("org.videolan.vlc");
+            return "loja";
+        }
+
+        @JavascriptInterface
+        public boolean copiar(String texto) {
+            try {
+                ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                cm.setPrimaryClip(ClipData.newPlainText("Telão", texto));
+                return true;
+            } catch (Exception e) { return false; }
+        }
+
+        // Mantém a tela acesa enquanto um vídeo toca.
+        @JavascriptInterface
+        public void manterTelaLigada(final boolean ligada) {
+            runOnUiThread(new Runnable() { public void run() {
+                if (ligada) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            } });
+        }
+    }
+}
