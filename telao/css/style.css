@@ -56,6 +56,7 @@ button, input, select { font: inherit; color: inherit; }
 }
 .top.scrolled { background: rgba(11, 13, 18, 0.96); box-shadow: 0 1px 0 var(--line); }
 .is-player .top, .is-player .bottom, .is-player .foot { display: none; }
+.is-live .bottom, .is-live .foot { display: none; }
 
 .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 800; font-size: 21px; letter-spacing: -0.02em; }
 .logo img { border-radius: 7px; }
@@ -84,6 +85,11 @@ button, input, select { font: inherit; color: inherit; }
 .iconbtn:hover { background: rgba(255, 255, 255, 0.16); }
 .iconbtn.active { background: var(--accent); color: var(--accent-ink); }
 .only-mobile { display: none; }
+
+@media (max-width: 1180px) {
+  .hsearch { display: none; }
+  .only-mobile { display: inline-grid; margin-left: auto; }
+}
 
 /* ---------- barra inferior (celular) ---------- */
 
@@ -411,6 +417,113 @@ button, input, select { font: inherit; color: inherit; }
 
 .foot { padding: 28px var(--gut) 36px; color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--line); margin-top: 24px; }
 .foot p { max-width: 90ch; margin: 0; }
+
+/* ---------- TV ao vivo ---------- */
+
+.chips-nav { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 4px 2px 8px; margin: -4px -2px 8px; }
+.chips-nav::-webkit-scrollbar { display: none; }
+.chip {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px;
+  border-radius: 999px; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line);
+  text-decoration: none; font-weight: 600; font-size: 15px; white-space: nowrap;
+}
+.chip .ico { width: 18px; height: 18px; }
+.chip:hover { background: rgba(255, 255, 255, 0.14); }
+.chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.chip.add { color: var(--accent); border-style: dashed; border-color: rgba(245, 179, 1, 0.5); background: none; }
+
+.tvrecent { margin: 8px calc(-1 * var(--gut)) 4px; }
+.tvtools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 18px 0 14px; }
+.filter {
+  display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px; flex: 1 1 240px; max-width: 420px;
+  border-radius: 999px; background: var(--bg2); border: 1px solid var(--line);
+}
+.filter:focus-within { border-color: var(--accent); }
+.filter .ico { width: 18px; height: 18px; color: var(--muted); }
+.filter input { flex: 1; min-width: 0; background: none; border: 0; outline: none; }
+.tvtools select { height: 44px; padding: 0 14px; border-radius: 999px; background: var(--bg2); border: 1px solid var(--line); max-width: 100%; }
+.btn.sm { min-height: 44px; padding: 0 16px; font-size: 14.5px; }
+.btn.sm .ico { width: 19px; height: 19px; }
+.tvpage .count { margin: 0 0 12px; }
+
+.chgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.chgrid > .spinner, .chgrid > .muted, .chgrid > .panel { grid-column: 1 / -1; }
+.ch {
+  display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 12px; min-width: 0;
+  background: var(--bg2); border: 1px solid var(--line); text-decoration: none; transition: background 0.15s, transform 0.15s;
+}
+.ch:hover { background: #1c2230; }
+.ch:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; transform: scale(1.02); }
+.chlogo {
+  flex: none; width: 64px; height: 48px; border-radius: 8px; background: #eef0f4; display: grid; place-items: center; overflow: hidden;
+}
+.chlogo img { max-width: 86%; max-height: 80%; object-fit: contain; }
+.chlogo.sm { width: 56px; height: 42px; }
+.chlogo.xs { width: 44px; height: 32px; border-radius: 6px; }
+.chini { color: #3a4152; font-weight: 800; font-size: 17px; }
+.chtxt { display: flex; flex-direction: column; min-width: 0; }
+.chtxt b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chtxt small { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lbl { align-self: flex-start; margin-top: 3px; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 5px; background: rgba(255, 255, 255, 0.1); color: #cdd2da; }
+.lbl.vlc { background: rgba(255, 136, 0, 0.18); color: #ffb35c; }
+.chrow .ch { flex: 0 0 250px; }
+
+.vlchelp { margin-top: 28px; }
+.vlchelp summary { cursor: pointer; font-weight: 700; font-size: 17px; }
+.vlchelp .steps { margin: 14px 0 0; }
+.tvpage > .small { margin-top: 16px; max-width: 80ch; }
+.tvpage a:not(.chip):not(.ch):not(.btn) { color: var(--accent); }
+
+.live {
+  display: grid; grid-template-columns: 1fr minmax(280px, 340px); gap: 20px;
+  padding: 16px var(--gut) 24px; min-height: 100vh; align-items: start;
+}
+.is-live .top { position: static; background: var(--bg); box-shadow: 0 1px 0 var(--line); }
+.live-video { position: relative; aspect-ratio: 16 / 9; background: #000; border-radius: 12px; overflow: hidden; }
+.live-video video { width: 100%; height: 100%; display: block; background: #000; }
+.live-loading { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.live-loading[hidden] { display: none; }
+.live-msg {
+  position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 4px;
+  padding: 24px; text-align: center; background: rgba(8, 10, 14, 0.88);
+}
+.live-msg[hidden] { display: none; }
+.live-msg p { max-width: 52ch; margin: 0; }
+.live-msg .actions { justify-content: center; }
+.onair {
+  position: absolute; left: 12px; top: 12px; font-size: 11px; font-weight: 800; letter-spacing: 0.08em;
+  padding: 3px 8px; border-radius: 5px; background: #e5332a; color: #fff; pointer-events: none;
+}
+.live-bar { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
+.live-title { min-width: 0; }
+.live-title h1 { font-size: clamp(20px, 2.4vw, 28px); font-weight: 800; }
+.live-title small { color: var(--muted); }
+.live-actions { margin-top: 14px; }
+.live-actions .btn { min-height: 42px; padding: 0 16px; font-size: 15px; }
+.live-list {
+  position: sticky; top: 16px; display: flex; flex-direction: column; gap: 10px;
+  max-height: calc(100vh - 32px); background: var(--bg2); border: 1px solid var(--line); border-radius: 14px; padding: 12px;
+}
+.live-list .filter { max-width: none; flex: none; background: var(--bg); }
+.zap { overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding: 2px; }
+.zap a { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 10px; text-decoration: none; min-width: 0; }
+.zap a[hidden] { display: none; }
+.zap a:hover { background: rgba(255, 255, 255, 0.06); }
+.zap a.on { background: rgba(245, 179, 1, 0.16); box-shadow: inset 3px 0 0 var(--accent); }
+.zap a:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.zap span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.zap b { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zap small { font-size: 12px; color: var(--muted); }
+
+@media (max-width: 960px) {
+  .live { grid-template-columns: 1fr; padding: 0 0 24px; gap: 0; }
+  .live-video { border-radius: 0; }
+  .live-bar, .live-actions { padding: 0 var(--gut); }
+  .live-actions { gap: 8px; }
+  .live-actions .btn { min-height: 40px; padding: 0 14px; font-size: 14px; }
+  .live-list { position: static; max-height: none; margin: 18px var(--gut) 0; }
+  .zap { max-height: 60vh; }
+}
 
 /* ---------- TV (telas grandes) ---------- */
 

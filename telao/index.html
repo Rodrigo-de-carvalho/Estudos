@@ -23,6 +23,7 @@
       <a href="#/filmes" data-nav data-sec="filmes">Filmes</a>
       <a href="#/series" data-nav data-sec="series">Séries</a>
       <a href="#/gratis" data-nav data-sec="gratis">Assista grátis</a>
+      <a href="#/tv" data-nav data-sec="tv">TV ao vivo</a>
       <a href="#/lista" data-nav data-sec="lista">Minha lista</a>
     </nav>
     <form class="hsearch" id="hsearch" role="search">
@@ -43,7 +44,8 @@
     <p>
       O Telão usa a API do TMDB, mas não é endossado nem certificado pelo TMDB.
       Os dados de onde assistir vêm do JustWatch. Os filmes que tocam aqui são
-      do Internet Archive, em domínio público ou com licença livre.
+      do Internet Archive, em domínio público ou com licença livre. As listas de TV ao vivo
+      vêm do projeto IPTV-org; o Telão não hospeda nenhum canal.
     </p>
   </footer>
 
@@ -52,6 +54,7 @@
     <a href="#/filmes" data-sec="filmes"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V4z"/></svg>Filmes</a>
     <a href="#/series" data-sec="series"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 3H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5v2h8v-2h5a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 14H3V5h18z"/></svg>Séries</a>
     <a href="#/gratis" data-sec="gratis"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-2 14.5v-9l6 4.5z"/></svg>Grátis</a>
+    <a href="#/tv" data-sec="tv"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 6h-7.6l3.3-3.3-.7-.7L12 6 8 2l-.7.7L10.6 6H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm0 14H3V8h18z"/></svg>TV</a>
     <a href="#/lista" data-sec="lista"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2z"/></svg>Lista</a>
   </nav>
 
@@ -59,6 +62,8 @@
 
   <script src="js/store.js"></script>
   <script src="js/api.js"></script>
+  <script src="vendor/hls.min.js"></script>
+  <script src="js/tv.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

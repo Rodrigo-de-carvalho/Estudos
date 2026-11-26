@@ -18,9 +18,10 @@
     return v;
   }
 
+  // Devolve false quando não deu para gravar (por exemplo, lista grande demais).
   function write(k, v) {
     mem[k] = v;
-    try { localStorage.setItem(PREFIX + k, JSON.stringify(v)); } catch (e) { /* ignora */ }
+    try { localStorage.setItem(PREFIX + k, JSON.stringify(v)); return true; } catch (e) { return false; }
   }
 
   const keyOf = (it) => `${it.src}:${it.type}:${it.id}`;
@@ -59,5 +60,33 @@
       write('progress', all);
     },
     clearAllProgress: () => write('progress', {}),
+
+    /* TV ao vivo */
+    tvFavs: () => read('tvFavs', []),
+    isTvFav: (ch) => read('tvFavs', []).some((c) => c.id === ch.id),
+    toggleTvFav(ch) {
+      const l = read('tvFavs', []).slice();
+      const i = l.findIndex((c) => c.id === ch.id);
+      if (i >= 0) l.splice(i, 1); else l.push(ch);
+      write('tvFavs', l);
+      return i < 0;
+    },
+    tvRecent: () => read('tvRecent', []),
+    pushTvRecent(ch) {
+      const l = read('tvRecent', []).filter((c) => c.id !== ch.id);
+      l.unshift(ch);
+      write('tvRecent', l.slice(0, 12));
+    },
+    clearTvRecent: () => write('tvRecent', []),
+    tvLists: () => read('tvLists', []),
+    addTvList(list) {
+      const l = read('tvLists', []).concat([list]);
+      return write('tvLists', l);
+    },
+    removeTvList(id) {
+      write('tvLists', read('tvLists', []).filter((x) => x.id !== id));
+    },
+    tvLastList: () => read('tvLastList', 'br'),
+    setTvLastList: (id) => write('tvLastList', id),
   };
 })();

@@ -26,6 +26,11 @@
     star: '<path d="M12 17.3 18.2 21l-1.6-7L22 9.2l-7.2-.6L12 2 9.2 8.6 2 9.2 7.5 14l-1.7 7z"/>',
     close: '<path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/>',
     ext: '<path d="M14 3v2h3.6l-9.8 9.8 1.4 1.4L19 6.4V10h2V3zM19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2z"/>',
+    starO: '<path d="M22 9.2l-7.2-.6L12 2 9.2 8.6 2 9.2 7.5 14l-1.7 7L12 17.3 18.2 21l-1.6-7zM12 15.4l-3.8 2.3 1-4.3-3.3-2.9 4.4-.4L12 6.1l1.7 4 4.4.4-3.3 2.9 1 4.3z"/>',
+    copy: '<path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11z"/>',
+    download: '<path d="M5 20h14v-2H5zM19 9h-4V3H9v6H5l7 7z"/>',
+    prev: '<path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/>',
+    next: '<path d="M6 18l8.5-6L6 6zm10-12v12h2V6z"/>',
     search: '<path d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/>',
   };
   const icon = (n) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
@@ -248,6 +253,7 @@
       iaHero();
       rows.appendChild(keyBanner(false));
       continueRow(rows);
+      T.tv.homeRow(rows);
       api.IA_CATS.slice(0, 7).forEach((c) =>
         asyncRow(rows, c.title, () => api.iaCatList(c.key).then((r) => r.items), { more: `#/gratis/${c.key}` })
       );
@@ -263,6 +269,7 @@
       });
 
     continueRow(rows);
+    T.tv.homeRow(rows);
     asyncRow(rows, 'Em alta na semana', () => api.tmdbList('/trending/all/week'));
     asyncRow(rows, 'Grátis com anúncios no Brasil', () =>
       api.tmdbList('/discover/movie', {
@@ -971,13 +978,15 @@
   function router() {
     clearInterval(heroTimer);
     closeModal();
+    T.tv.stop();
+    view.onclick = null;
     document.body.classList.remove('is-player');
     const raw = location.hash.replace(/^#\/?/, '');
     const parts = raw.split('/').filter(Boolean).map((s) => {
       try { return decodeURIComponent(s); } catch (e) { return s; }
     });
     const sec = parts[0] || '';
-    setActive(['filmes', 'series', 'gratis', 'lista', 'config'].includes(sec) ? sec : sec === '' ? '' : null);
+    setActive(['filmes', 'series', 'gratis', 'tv', 'lista', 'config'].includes(sec) ? sec : sec === '' ? '' : null);
     window.scrollTo(0, 0);
     onScroll();
     const hs = $('#hsearch input');
@@ -989,6 +998,10 @@
       case 'series': return renderTmdbHub('tv');
       case 'gratis': return parts[1] ? renderIaGrid(parts[1]) : renderFree();
       case 'lista': return renderList();
+      case 'tv':
+        if (parts[1] === 'ver') return T.tv.player(parts[2], parts[3]);
+        if (parts[1] === 'adicionar') return T.tv.add();
+        return T.tv.home(parts[1]);
       case 'busca': {
         const q = parts.slice(1).join('/');
         hs.value = q;
@@ -1003,6 +1016,13 @@
       default: return renderNotFound();
     }
   }
+
+  // Funções compartilhadas com a TV ao vivo (tv.js).
+  T.ui = {
+    view, $, esc, icon, toast,
+    newToken: () => ++renderToken,
+    isCurrent: (t) => t === renderToken,
+  };
 
   window.addEventListener('hashchange', router);
   router();
