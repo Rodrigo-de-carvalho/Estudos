@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#09090b">
+  <meta name="description" content="Telão: filmes e séries, trailers, onde assistir no Brasil e filmes clássicos grátis.">
+  <title>Telão</title>
+  <link rel="preconnect" href="https://image.tmdb.org">
+  <link rel="preconnect" href="https://api.themoviedb.org">
+  <link rel="preconnect" href="https://archive.org">
+  <link rel="preconnect" href="https://iptv-org.github.io">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <link rel="icon" href="img/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a class="skip" href="#view">Pular para o conteúdo</a>
+
+  <header class="top" id="top">
+    <a class="logo" href="#/" data-nav aria-label="Telão, início">
+      <img src="img/icon.svg" alt="" width="28" height="28">
+      <span>Telão</span>
+    </a>
+    <nav class="links" aria-label="Seções">
+      <a href="#/" data-nav data-sec="">Início</a>
+      <a href="#/filmes" data-nav data-sec="filmes">Filmes</a>
+      <a href="#/series" data-nav data-sec="series">Séries</a>
+      <a href="#/animes" data-nav data-sec="animes">Animes</a>
+      <a href="#/doramas" data-nav data-sec="doramas">Doramas</a>
+      <a href="#/tv" data-nav data-sec="tv">TV ao vivo</a>
+      <a href="#/gratis" data-nav data-sec="gratis">Grátis</a>
+    </nav>
+    <div class="topicons">
+    <a class="iconbtn" href="#/busca" data-nav data-sec="busca" aria-label="Buscar">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg>
+    </a>
+    <a class="iconbtn hide-mobile" href="#/lista" data-nav data-sec="lista" aria-label="Minha lista">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.4 10.6 20C5.4 15.4 2 12.3 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.8 4.5 2.1C13.1 3.8 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 3.8-3.4 6.9-8.6 11.5z"/></svg>
+    </a>
+    <a class="iconbtn" href="#/config" data-nav data-sec="config" aria-label="Configurações">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3h-4l-.4 2.9a7.6 7.6 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.6 7.6 0 0 0 1.7 1L11 21h4l.4-2.9a7.6 7.6 0 0 0 1.7-1l2.5 1 2-3.5zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
+    </a>
+    </div>
+  </header>
+
+  <main id="view" tabindex="-1"></main>
+
+  <footer class="foot">
+    <p>
+      O Telão usa a API do TMDB, mas não é endossado nem certificado pelo TMDB.
+      Os dados de onde assistir vêm do JustWatch. Os filmes que tocam aqui são
+      do Internet Archive, em domínio público ou com licença livre. As listas de TV ao vivo
+      vêm do projeto IPTV-org; o Telão não hospeda nenhum canal.
+    </p>
+  </footer>
+
+  <nav class="bottom" aria-label="Seções">
+    <a href="#/" data-sec=""><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>Início</a>
+    <a href="#/filmes" data-sec="filmes"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V4z"/></svg>Filmes</a>
+    <a href="#/series" data-sec="series"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 3H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5v2h8v-2h5a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 14H3V5h18z"/></svg>Séries</a>
+    <a href="#/lista" data-sec="lista"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.4 10.6 20C5.4 15.4 2 12.3 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.8 4.5 2.1C13.1 3.8 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 3.8-3.4 6.9-8.6 11.5z"/></svg>Minha lista</a>
+    <a href="#/mais" data-sec="mais" data-also="animes doramas tv gratis config busca"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>Mais</a>
+  </nav>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/store.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/tv.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,375 @@
+package __PACOTE__;
+
+import android.app.Activity;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.net.Uri;
+import android.os.Bundle;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
+import android.webkit.JavascriptInterface;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceResponse;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.lang.reflect.Method;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
+
+// Tela única: abre assets/index.html num WebView.
+// Ponte para o JavaScript (window.Android): salvarArquivo, abrirArquivo, pegarArquivoAberto,
+// e para o Telão: copiar, manterTelaLigada, modoAoVivo, prepararCanal.
+//
+// TV ao vivo: enquanto um canal está aberto (modoAoVivo), os pedidos de vídeo passam
+// pelo próprio app (shouldInterceptRequest). O app busca os dados como um player comum,
+// sem a trava de CORS dos navegadores, envia o Referer/User-Agent que o canal exige e
+// segue redirecionamentos (inclusive de https para http).
+public class MainActivity extends Activity {
+    private static final boolean INTERNET = __INTERNET__;
+    private static final boolean BLOQUEAR_PRINT = __BLOQUEAR_PRINT__;
+    private static final int REQ_SALVAR = 1, REQ_ABRIR = 2;
+    // Valores literais (as constantes não existem no android.jar antigo usado para compilar).
+    private static final int SCREEN_ORIENTATION_UNSPECIFIED = -1, SCREEN_ORIENTATION_SENSOR_LANDSCAPE = 6;
+    private static final int UI_TELA_CHEIA = 0x2 | 0x4 | 0x100 | 0x200 | 0x400 | 0x1000; // imersivo
+    private WebView web;
+    private FrameLayout raiz;
+    private View telaCheia;
+    private WebChromeClient.CustomViewCallback fecharTelaCheia;
+    private volatile boolean aoVivo = false;
+    private volatile String canalReferer = "", canalUA = "";
+    private String uaPadrao = "";
+    private String paraSalvar;
+    private String arquivoAberto;
+
+    @Override
+    protected void onCreate(Bundle saved) {
+        super.onCreate(saved);
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        if (BLOQUEAR_PRINT) getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
+
+        raiz = new FrameLayout(this);
+        raiz.setBackgroundColor(Color.rgb(11, 13, 18));
+        web = new WebView(this);
+        web.setBackgroundColor(Color.rgb(11, 13, 18));
+        WebSettings s = web.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setAllowFileAccess(false);
+        s.setBlockNetworkLoads(!INTERNET);
+        s.setSaveFormData(false);
+        // Vídeo começa sozinho ao abrir um canal (API 17+).
+        chamar(s, "setMediaPlaybackRequiresUserGesture", boolean.class, Boolean.FALSE);
+        // Permite canais http:// dentro da página https (API 21+; 0 = MIXED_CONTENT_ALWAYS_ALLOW).
+        if (INTERNET) chamar(s, "setMixedContentMode", int.class, Integer.valueOf(0));
+        uaPadrao = s.getUserAgentString();
+
+        web.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
+                if (!aoVivo || !INTERNET) return null;
+                if (!(url.startsWith("http://") || url.startsWith("https://")) || url.startsWith("__BASE_URL__")) return null;
+                if (naoInterceptar(url)) return null;
+                try { return buscar(url); } catch (Exception e) { return null; }
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                if (url.startsWith("intent:")) {
+                    try {
+                        Intent i = Intent.parseUri(url, 1); // 1 = Intent.URI_INTENT_SCHEME
+                        startActivity(i);
+                    } catch (Exception e) { }
+                    return true;
+                }
+                // Links externos abrem no navegador do celular (só se o app tem internet).
+                if (INTERNET && (url.startsWith("https://") || url.startsWith("http://") || url.startsWith("market:"))) {
+                    try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); } catch (Exception e) { }
+                }
+                return true;
+            }
+        });
+        web.setWebChromeClient(new WebChromeClient() {
+            // Botão de tela cheia dos vídeos.
+            @Override
+            public void onShowCustomView(View view, CustomViewCallback callback) {
+                if (telaCheia != null) { callback.onCustomViewHidden(); return; }
+                telaCheia = view;
+                fecharTelaCheia = callback;
+                raiz.addView(view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                web.setVisibility(View.GONE);
+                getWindow().getDecorView().setSystemUiVisibility(UI_TELA_CHEIA);
+                getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                setRequestedOrientation(SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+            }
+
+            @Override
+            public void onHideCustomView() {
+                if (telaCheia == null) return;
+                raiz.removeView(telaCheia);
+                telaCheia = null;
+                web.setVisibility(View.VISIBLE);
+                getWindow().getDecorView().setSystemUiVisibility(0);
+                setRequestedOrientation(SCREEN_ORIENTATION_UNSPECIFIED);
+                if (fecharTelaCheia != null) fecharTelaCheia.onCustomViewHidden();
+                fecharTelaCheia = null;
+            }
+
+            // Sem isto o WebView mostra um ícone cinza antes do vídeo começar.
+            @Override
+            public Bitmap getDefaultVideoPoster() {
+                return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+            }
+        });
+        web.addJavascriptInterface(new Ponte(), "Android");
+        // A base URL define a "origem" do localStorage. Nunca mude depois de publicar o app.
+        web.loadDataWithBaseURL("__BASE_URL__", lerAsset("index.html"), "text/html", "UTF-8", null);
+        raiz.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        setContentView(raiz);
+    }
+
+    // APIs, imagens e YouTube seguem o caminho normal do WebView.
+    private static boolean naoInterceptar(String url) {
+        String host = Uri.parse(url).getHost();
+        if (host == null) return true;
+        host = host.toLowerCase();
+        String[] fora = { "themoviedb.org", "tmdb.org", "archive.org", "github.io", "githubusercontent.com",
+            "youtube.com", "youtube-nocookie.com", "ytimg.com", "googlevideo.com", "google.com", "gstatic.com" };
+        for (String f : fora) if (host.equals(f) || host.endsWith("." + f)) return true;
+        String caminho = Uri.parse(url).getPath();
+        caminho = caminho == null ? "" : caminho.toLowerCase();
+        return caminho.endsWith(".png") || caminho.endsWith(".jpg") || caminho.endsWith(".jpeg")
+            || caminho.endsWith(".svg") || caminho.endsWith(".webp") || caminho.endsWith(".gif");
+    }
+
+    private WebResourceResponse buscar(String endereco) throws Exception {
+        URL u = new URL(endereco);
+        HttpURLConnection c = null;
+        int code = 0;
+        for (int i = 0; i < 6; i++) {
+            c = (HttpURLConnection) u.openConnection();
+            c.setInstanceFollowRedirects(false);
+            c.setConnectTimeout(12000);
+            c.setReadTimeout(25000);
+            c.setRequestProperty("User-Agent", canalUA.length() > 0 ? canalUA : uaPadrao);
+            if (canalReferer.length() > 0) {
+                c.setRequestProperty("Referer", canalReferer);
+                String origem = Uri.parse(canalReferer).getScheme() + "://" + Uri.parse(canalReferer).getHost();
+                c.setRequestProperty("Origin", origem);
+            }
+            code = c.getResponseCode();
+            if (code >= 300 && code < 400) {
+                String loc = c.getHeaderField("Location");
+                c.disconnect();
+                if (loc == null) break;
+                u = new URL(u, loc);
+                continue;
+            }
+            break;
+        }
+        InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
+        if (in == null) in = new ByteArrayInputStream(new byte[0]);
+        String tipo = c.getContentType();
+        String mime = tipo == null ? "application/octet-stream" : tipo.split(";")[0].trim();
+        String caminho = u.getPath() == null ? "" : u.getPath().toLowerCase();
+        boolean playlist = mime.toLowerCase().contains("mpegurl") || caminho.endsWith(".m3u8") || caminho.endsWith(".m3u");
+        if (playlist && code < 400) {
+            // O hls.js resolve endereços relativos pelo endereço original; depois de um
+            // redirecionamento, eles precisam virar absolutos.
+            String texto = new String(lerTudo(in), "UTF-8");
+            in = new ByteArrayInputStream(reescreverPlaylist(texto, u).getBytes("UTF-8"));
+            mime = "application/vnd.apple.mpegurl";
+        }
+        WebResourceResponse r = new WebResourceResponse(mime, playlist ? "UTF-8" : null, in);
+        Map<String, String> h = new HashMap<String, String>();
+        h.put("Access-Control-Allow-Origin", "*");
+        h.put("Cache-Control", "no-cache");
+        try {
+            r.getClass().getMethod("setResponseHeaders", Map.class).invoke(r, h);
+            if (code >= 400 && code < 600) {
+                String motivo = c.getResponseMessage();
+                r.getClass().getMethod("setStatusCodeAndReasonPhrase", int.class, String.class)
+                    .invoke(r, Integer.valueOf(code), motivo == null || motivo.length() == 0 ? "Erro" : motivo);
+            }
+        } catch (Exception e) { }
+        return r;
+    }
+
+    private static String reescreverPlaylist(String texto, URL base) {
+        StringBuilder sb = new StringBuilder();
+        String[] linhas = texto.split("\n");
+        for (int k = 0; k < linhas.length; k++) {
+            String l = linhas[k].trim();
+            if (l.length() == 0) continue;
+            if (l.startsWith("#")) {
+                int i = l.indexOf("URI=\"");
+                if (i >= 0) {
+                    int j = l.indexOf('"', i + 5);
+                    if (j > i) {
+                        try { l = l.substring(0, i + 5) + new URL(base, l.substring(i + 5, j)).toString() + l.substring(j); }
+                        catch (Exception e) { }
+                    }
+                }
+                sb.append(l);
+            } else {
+                try { sb.append(new URL(base, l).toString()); } catch (Exception e) { sb.append(l); }
+            }
+            sb.append('\n');
+        }
+        return sb.toString();
+    }
+
+    private static void chamar(Object alvo, String metodo, Class<?> tipo, Object valor) {
+        try {
+            Method m = alvo.getClass().getMethod(metodo, tipo);
+            m.invoke(alvo, valor);
+        } catch (Exception e) { }
+    }
+
+    private void abrirLoja(String pacote) {
+        try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + pacote))); }
+        catch (Exception e) {
+            try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=" + pacote))); }
+            catch (Exception e2) { }
+        }
+    }
+
+    private String lerAsset(String nome) {
+        try { return new String(lerTudo(getAssets().open(nome)), "UTF-8"); }
+        catch (Exception e) { return "<p>Erro ao abrir o app.</p>"; }
+    }
+
+    private static byte[] lerTudo(InputStream in) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buf = new byte[16384];
+        int n;
+        while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+        in.close();
+        return out.toByteArray();
+    }
+
+    private void js(final String codigo) {
+        runOnUiThread(new Runnable() { public void run() { web.loadUrl("javascript:" + codigo); } });
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (telaCheia != null) { sairDaTelaCheia(); return; }
+        if (web != null && web.canGoBack()) web.goBack();
+        else super.onBackPressed();
+    }
+
+    private void sairDaTelaCheia() {
+        if (fecharTelaCheia != null) fecharTelaCheia.onCustomViewHidden();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (web != null) web.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (web != null) web.onResume();
+    }
+
+    @Override
+    protected void onActivityResult(int req, int res, Intent data) {
+        Uri uri = (res == RESULT_OK && data != null) ? data.getData() : null;
+        if (req == REQ_SALVAR) {
+            boolean ok = false;
+            if (uri != null && paraSalvar != null) {
+                try {
+                    OutputStream out = getContentResolver().openOutputStream(uri);
+                    out.write(paraSalvar.getBytes("UTF-8"));
+                    out.close();
+                    ok = true;
+                } catch (Exception e) { ok = false; }
+            }
+            paraSalvar = null;
+            js("window.aoSalvarArquivo&&aoSalvarArquivo(" + ok + ")");
+        } else if (req == REQ_ABRIR && uri != null) {
+            try {
+                arquivoAberto = new String(lerTudo(getContentResolver().openInputStream(uri)), "UTF-8");
+                js("window.aoAbrirArquivo&&aoAbrirArquivo()");
+            } catch (Exception e) { arquivoAberto = null; }
+        }
+    }
+
+    public class Ponte {
+        // Abre a tela "Salvar como" do Android. Depois chama window.aoSalvarArquivo(true|false).
+        @JavascriptInterface
+        public void salvarArquivo(String conteudo, String nomeDoArquivo, String tipo) {
+            paraSalvar = conteudo;
+            final Intent i = new Intent("android.intent.action.CREATE_DOCUMENT");
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType(tipo == null || tipo.length() == 0 ? "text/plain" : tipo);
+            i.putExtra(Intent.EXTRA_TITLE, nomeDoArquivo);
+            runOnUiThread(new Runnable() { public void run() {
+                try { startActivityForResult(i, REQ_SALVAR); } catch (Exception e) { js("window.aoSalvarArquivo&&aoSalvarArquivo(false)"); }
+            } });
+        }
+
+        // Abre o seletor de arquivos. Depois chama window.aoAbrirArquivo(); o texto vem de pegarArquivoAberto().
+        @JavascriptInterface
+        public void abrirArquivo() {
+            final Intent i = new Intent("android.intent.action.OPEN_DOCUMENT");
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType("*/*");
+            runOnUiThread(new Runnable() { public void run() {
+                try { startActivityForResult(i, REQ_ABRIR); } catch (Exception e) { }
+            } });
+        }
+
+        @JavascriptInterface
+        public String pegarArquivoAberto() {
+            String p = arquivoAberto;
+            arquivoAberto = null;
+            return p;
+        }
+
+        @JavascriptInterface
+        public boolean copiar(String texto) {
+            try {
+                ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                cm.setPrimaryClip(ClipData.newPlainText("Telão", texto));
+                return true;
+            } catch (Exception e) { return false; }
+        }
+
+        // Liga/desliga a passagem dos vídeos da TV ao vivo pelo app.
+        @JavascriptInterface
+        public void modoAoVivo(boolean ligado) { aoVivo = ligado; }
+
+        // Cabeçalhos que o canal exige (vêm da lista M3U, linhas #EXTVLCOPT).
+        @JavascriptInterface
+        public void prepararCanal(String referer, String userAgent) {
+            canalReferer = referer == null ? "" : referer;
+            canalUA = userAgent == null ? "" : userAgent;
+        }
+
+        // Mantém a tela acesa enquanto um vídeo toca.
+        @JavascriptInterface
+        public void manterTelaLigada(final boolean ligada) {
+            runOnUiThread(new Runnable() { public void run() {
+                if (ligada) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            } });
+        }
+    }
+}
